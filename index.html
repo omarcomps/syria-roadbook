@@ -117,7 +117,11 @@
   table.manifest { width: 100%; border-collapse: collapse; font-size: 11px; }
   table.manifest th { position: sticky; top: 0; background: #f1f5f9; color: #475569; text-align: left; padding: 6px 7px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
   table.manifest td { padding: 6px 7px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
-  table.manifest tr:hover td { background: #f8fafc; }
+  table.manifest tr:hover td { filter: brightness(0.96); }
+  tr.row-departure td { background: var(--primary-tint); }
+  tr.row-arrival td { background: #e6ecf3; }
+  tr.row-kiss td { background: #fdf1e0; }
+  tr.row-waypoint td { background: #f3f6f9; }
   .empty-row { text-align: center; color: #94a3b8; white-space: normal; padding: 16px 6px; }
   .ret-col { color: #b91c1c; }
 
@@ -191,9 +195,9 @@
         </div>
 
         <div class="field">
-          <label>Required Stops (optional, auto-ordered)</label>
+          <label>Required Waypoints (optional, auto-ordered)</label>
           <div class="combo">
-            <input type="text" id="req-input" placeholder="Add a required stop..." autocomplete="off" disabled />
+            <input type="text" id="req-input" placeholder="Add a required waypoint..." autocomplete="off" disabled />
             <div class="combo-list" id="req-list"></div>
           </div>
           <div class="chip-list" id="req-chips"></div>
@@ -232,7 +236,7 @@
 
       <div id="diagram-pane">
         <div class="card-title">Schematic Diagram</div>
-        <div class="diagram-placeholder" id="schematic-placeholder">Calculate a route to see the stop sequence.</div>
+        <div class="diagram-placeholder" id="schematic-placeholder">Calculate a route to see the waypoint sequence.</div>
         <div id="schematic-card" style="display:none;">
           <div class="schematic" id="schematic"></div>
         </div>
@@ -252,9 +256,9 @@
         <div class="table-wrap">
           <table class="manifest">
             <thead>
-              <tr><th>#</th><th>Type</th><th>Waypoint / Segment</th><th>Out Leg</th><th>Out Cum</th><th>Time</th><th>Ret Leg</th><th>Ret Cum</th><th>Ret Time</th></tr>
+              <tr><th>#</th><th>Waypoint / Segment</th><th>Out Leg</th><th>Out Cum</th><th>Time</th><th>Ret Leg</th><th>Ret Cum</th><th>Ret Time</th></tr>
             </thead>
-            <tbody id="table-body"><tr><td colspan="9" class="empty-row">Calculate a route to view the manifest.</td></tr></tbody>
+            <tbody id="table-body"><tr><td colspan="8" class="empty-row">Calculate a route to view the manifest.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -717,7 +721,7 @@
       ['dep-input', 'arr-input', 'req-input'].forEach(function (id) { el(id).disabled = false; });
       el('dep-input').placeholder = 'Search departure...';
       el('arr-input').placeholder = 'Search arrival...';
-      el('req-input').placeholder = 'Add a required stop...';
+      el('req-input').placeholder = 'Add a required waypoint...';
       el('add-wp-btn').disabled = false;
 
       if (App.map) renderBaseWaypointsLayer();
@@ -892,11 +896,11 @@
 
     stops.forEach(function (node, i) {
       var isFirst = i === 0, isLast = i === stops.length - 1;
-      var type = isFirst ? 'Start' : (isLast ? 'Finish' : 'Required Stop');
+      var type = isFirst ? 'Start' : (isLast ? 'Finish' : 'Required Waypoint');
 
       items.push({
         seq: seqIndex++, type: type,
-        desc: (isFirst ? 'Departure (A): ' : isLast ? 'Arrival (B): ' : 'Required Stop: ') + node.wp.name + ' [ID: ' + node.wp.id + ']',
+        desc: (isFirst ? 'Departure (A): ' : isLast ? 'Arrival (B): ' : 'Required Waypoint: ') + node.wp.name + ' [ID: ' + node.wp.id + ']',
         shortName: node.wp.name, isKissPoint: node.wp.isKissPoint,
         lat: node.wp.lat, lng: node.wp.lng,
         outboundLeg: 0, outboundCum: outboundCum
@@ -919,8 +923,8 @@
           lastLocationKm = dw.locationWithinLeg;
           items.push({
             seq: seqIndex++,
-            type: dw.wp.isKissPoint ? 'Vehicle Swap Point' : 'Pass-Through WP',
-            desc: 'Stop: ' + dw.wp.name + ' [ID: ' + dw.wp.id + ']' + (dw.wp.isKissPoint ? ' ⇄' : ''),
+            type: dw.wp.isKissPoint ? 'Vehicle Swap Point' : 'Pass-Through Waypoint',
+            desc: 'Waypoint: ' + dw.wp.name + ' [ID: ' + dw.wp.id + ']',
             shortName: dw.wp.name, isKissPoint: dw.wp.isKissPoint,
             lat: dw.wp.lat, lng: dw.wp.lng,
             outboundLeg: legDist, outboundCum: outboundCum
@@ -930,7 +934,7 @@
         var remaining = legInfo.pathDist - lastLocationKm;
         if (next.connectorDist > 0.001) {
           outboundCum += remaining + next.connectorDist;
-          items.push({ seq: seqIndex++, type: 'Connector', desc: 'Link to Next Stop', shortName: 'Link', isKissPoint: false, outboundLeg: (remaining + next.connectorDist), outboundCum: outboundCum });
+          items.push({ seq: seqIndex++, type: 'Connector', desc: 'Link to Next Waypoint', shortName: 'Link', isKissPoint: false, outboundLeg: (remaining + next.connectorDist), outboundCum: outboundCum });
         } else {
           outboundCum += remaining;
         }
@@ -985,7 +989,7 @@
 
     var res = buildMultiLegResultWithLegInfo(nodeList, order, toleranceKm, avgSpeedKmh);
     if (!res) {
-      showSummaryError('Route Unreachable', 'No continuous network route found connecting all selected stops.');
+      showSummaryError('Route Unreachable', 'No continuous network route found connecting all selected waypoints.');
       clearRouteDisplay();
       return;
     }
@@ -1097,10 +1101,10 @@
     var multiStop = res.orderedStopWaypoints.length > 2;
     var html = '<div class="metric-grid">' +
       '<div class="metric"><div class="metric-val">' + res.totalDist.toFixed(2) + ' km</div><div class="metric-lbl">Total Distance</div></div>' +
-      '<div class="metric"><div class="metric-val">' + res.detectedWaypoints.length + '</div><div class="metric-lbl">En-route Stops</div></div>' +
+      '<div class="metric"><div class="metric-val">' + res.detectedWaypoints.length + '</div><div class="metric-lbl">En-route Waypoints</div></div>' +
       '<div class="metric wide"><div class="metric-val">' + formatDuration(res.totalDist / res.avgSpeedKmh) + '</div><div class="metric-lbl">Est. Travel Time (' + res.avgSpeedKmh + ' km/h)</div></div>' +
       '</div>';
-    if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required stop(s), auto-ordered</div>';
+    if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required waypoint(s), auto-ordered</div>';
     if (swapCount > 0) html += '<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Vehicle Swap Point(s) Included</div>';
     el('summary-card').style.display = 'block';
     el('summary-card').innerHTML = html;
@@ -1117,7 +1121,7 @@
       var diff = alt.totalDist - shortestDist;
       html += '<div class="option' + (isSelected ? ' selected' : '') + '" data-idx="' + idx + '">' +
         '<div class="option-label">Option ' + (idx + 1) + (idx === 0 ? ' · Shortest' : '') + '</div>' +
-        '<div class="option-meta"><span>' + alt.totalDist.toFixed(1) + ' km</span><span>' + alt.detectedWaypoints.length + ' stops</span>' +
+        '<div class="option-meta"><span>' + alt.totalDist.toFixed(1) + ' km</span><span>' + alt.detectedWaypoints.length + ' waypoints</span>' +
         (idx > 0 ? '<span class="option-diff">+' + diff.toFixed(1) + ' km</span>' : '') + '</div></div>';
     });
     html += '</div>';
@@ -1131,12 +1135,12 @@
   function renderSchematicDiagram(res) {
     var items = res.sequenceData, html = '';
     items.forEach(function (item, idx) {
-      var isStart = item.type === 'Start', isFinish = item.type === 'Finish', isReq = item.type === 'Required Stop', isKiss = item.isKissPoint;
+      var isStart = item.type === 'Start', isFinish = item.type === 'Finish', isReq = item.type === 'Required Waypoint', isKiss = item.isKissPoint;
       var cls = 'schem-symbol', icon = idx;
       if (isStart) { cls += ' dep'; icon = 'A'; }
       else if (isFinish) { cls += ' arr'; icon = 'B'; }
-      else if (isReq) { cls += ' req'; icon = svgIcon('star', 11, '#fff'); }
       else if (isKiss) { cls += ' kiss'; icon = svgIcon('swap', 11, '#fff'); }
+      else if (isReq) { cls += ' req'; icon = svgIcon('star', 11, '#fff'); }
       else { cls += ' wp'; }
       html += '<div class="schem-node"><div class="' + cls + '">' + icon + '</div>' +
         '<div class="schem-label" title="' + escapeHtml(item.shortName) + '">' + escapeHtml(item.shortName) + '</div>' +
@@ -1148,19 +1152,28 @@
   }
 
   function resetTable() {
-    el('table-body').innerHTML = '<tr><td colspan="9" class="empty-row">Calculate a route to view the manifest.</td></tr>';
+    el('table-body').innerHTML = '<tr><td colspan="8" class="empty-row">Calculate a route to view the manifest.</td></tr>';
     el('export-btn').disabled = true;
+  }
+
+  // Row classification: departure/arrival win (structural endpoints),
+  // then kiss point (operationally significant regardless of position),
+  // then any other waypoint. Connector/link rows get no tint -- they're
+  // a network segment, not a point.
+  function rowClassFor(item) {
+    if (item.type === 'Start') return 'row-departure';
+    if (item.type === 'Finish') return 'row-arrival';
+    if (item.isKissPoint) return 'row-kiss';
+    if (item.type === 'Connector') return '';
+    return 'row-waypoint';
   }
 
   function renderTableBreakdown(res) {
     var items = res.sequenceData;
-    var typeColors = { 'Start': '#d02327', 'Finish': '#1e3a5f', 'Required Stop': '#7c3aed', 'Vehicle Swap Point': '#d97706', 'Pass-Through WP': '#94a3b8', 'Connector': '#d97706' };
     var html = '';
     items.forEach(function (item) {
-      var color = typeColors[item.type] || '#d02327';
-      html += '<tr><td>' + item.seq + '</td>' +
-        '<td><span style="color:' + color + ';font-weight:bold;">' + escapeHtml(item.type) + '</span></td>' +
-        '<td>' + escapeHtml(item.desc) + '</td>' +
+      html += '<tr class="' + rowClassFor(item) + '"><td>' + item.seq + '</td>' +
+        '<td>' + escapeHtml(item.shortName) + '</td>' +
         '<td>' + (item.outboundLeg > 0 ? item.outboundLeg.toFixed(3) + ' km' : '-') + '</td>' +
         '<td><strong>' + item.outboundCum.toFixed(3) + ' km</strong></td>' +
         '<td>' + formatDuration(item.outboundTimeHrs) + '</td>' +
