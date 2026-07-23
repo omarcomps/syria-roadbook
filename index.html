@@ -136,8 +136,9 @@
 <body>
 
 <div id="signin-overlay">
-  <div>🔐 Connecting to OCA Syria Portal…</div>
-  <div class="msg" id="signin-msg">Checking sign-in status</div>
+  <div>🔐 OCA Syria Portal</div>
+  <div class="msg" id="signin-msg">Checking sign-in status…</div>
+  <div id="signin-error" style="color:#dc2626;font-size:11px;max-width:320px;text-align:center;"></div>
 </div>
 
 <div id="loading-overlay"><span id="loading-text">Working…</span></div>
@@ -1479,8 +1480,7 @@
   }
 
   function showFatalError(msg) {
-    el('signin-msg').textContent = msg;
-    el('signin-msg').style.color = '#dc2626';
+    el('signin-error').textContent = msg;
   }
 
   require(['esri/arcgis/OAuthInfo', 'esri/IdentityManager', 'dojo/domReady!'], function (OAuthInfo, esriId) {
@@ -1494,12 +1494,37 @@
     });
     esriId.registerOAuthInfos([info]);
 
-    el('signin-msg').textContent = 'Signing in…';
-    esriId.getCredential(CONFIG.portalUrl + '/sharing', { oAuthPopupConfirmation: false }).then(function () {
+    function attemptSignIn() {
+      var btn = el('signin-btn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+      el('signin-error').textContent = '';
+      esriId.getCredential(CONFIG.portalUrl + '/sharing', { oAuthPopupConfirmation: false }).then(function () {
+        startApp();
+      }, function (err) {
+        console.error('Sign-in failed', err);
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in to OCA Syria Portal'; }
+        showFatalError('Sign-in failed (' + (err && (err.message || err.details) || err) +
+          '). If a pop-up window did not appear, allow pop-ups for this site and try again.');
+      });
+    }
+
+    // Silent check first — if there's already a valid session (e.g. you
+    // signed in through this same browser recently), this resolves with
+    // no pop-up at all. Only if that fails do we show a Sign In button,
+    // since a pop-up can only be opened from a real click, not from code
+    // running automatically on page load (browsers block that).
+    el('signin-msg').textContent = 'Checking sign-in status…';
+    esriId.checkSignInStatus(CONFIG.portalUrl + '/sharing').then(function () {
       startApp();
-    }, function (err) {
-      console.error('Sign-in failed', err);
-      showFatalError('Sign-in failed — reload the page to try again. (' + (err && err.message || err) + ')');
+    }, function () {
+      el('signin-msg').innerHTML = '';
+      var btn = document.createElement('button');
+      btn.id = 'signin-btn';
+      btn.className = 'btn primary';
+      btn.style.cssText = 'padding:10px 24px;font-size:13px;flex:none;';
+      btn.textContent = 'Sign in to OCA Syria Portal';
+      btn.addEventListener('click', attemptSignIn);
+      el('signin-msg').appendChild(btn);
     });
   });
 
