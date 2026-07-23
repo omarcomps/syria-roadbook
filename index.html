@@ -61,6 +61,7 @@
   .combo-item:hover { background: var(--primary-tint); }
   .combo-item .type { float: right; font-size: 9.5px; color: #94a3b8; text-transform: uppercase; }
   .combo-empty { padding: 9px; color: #94a3b8; font-style: italic; }
+  .combo-group-header { padding: 6px 10px 3px; font-size: 9px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; background: #f8fafc; }
 
   .chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
   .chip { display: flex; align-items: center; gap: 6px; background: var(--primary-tint); border: 1px solid var(--primary-tint-2); color: var(--primary-dark); border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 11px; font-weight: 600; }
@@ -132,12 +133,12 @@
   .toast { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #fff; background: #0f172a; z-index: 1000; box-shadow: 0 6px 18px rgba(0,0,0,.3); max-width: 80%; text-align: center; }
   .toast.error { background: #b91c1c; } .toast.ok { background: #166534; }
 
-  .pin-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-  .pin-kiss { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--kiss); border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); }
-  .pin-req { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #7c3aed; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-  .pin-endpoint { width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
+  .pin-num { width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 7px; font-weight: 700; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .pin-kiss { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--kiss); border: 1.5px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.45); }
+  .pin-req { width: 17px; height: 17px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #7c3aed; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .pin-endpoint { width: 18px; height: 18px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 800; border: 1.5px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,.45); }
   .pin-endpoint span { transform: rotate(45deg); }
-  .pin-new { width: 18px; height: 18px; border-radius: 50%; background: #16a34a; border: 3px solid #fff; box-shadow: 0 0 0 2px #16a34a, 0 2px 6px rgba(0,0,0,.4); }
+  .pin-new { width: 14px; height: 14px; border-radius: 50%; background: #16a34a; border: 2.5px solid #fff; box-shadow: 0 0 0 2px #16a34a, 0 2px 5px rgba(0,0,0,.4); }
 
   .popup-form { font-size: 12px; min-width: 210px; }
   .popup-form label { display: block; font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; margin: 7px 0 3px; }
@@ -215,6 +216,11 @@
         </div>
         <div class="hint" id="tolerance-hint"></div>
 
+        <div class="field">
+          <label>Departure Time</label>
+          <input type="time" id="departure-time-input" />
+        </div>
+
         <div class="btn-row">
           <button class="btn primary" id="calc-btn" disabled>Calculate Route</button>
           <button class="btn secondary" id="reset-btn">Reset</button>
@@ -256,9 +262,9 @@
         <div class="table-wrap">
           <table class="manifest">
             <thead>
-              <tr><th>#</th><th>Waypoint / Segment</th><th>Out Leg</th><th>Out Cum</th><th>Time</th><th>Ret Leg</th><th>Ret Cum</th><th>Ret Time</th></tr>
+              <tr><th>#</th><th>Waypoint / Segment</th><th>Out Leg</th><th>Out Cum</th><th>Time</th><th>ETA</th><th>Ret Leg</th><th>Ret Cum</th><th>Ret Time</th></tr>
             </thead>
-            <tbody id="table-body"><tr><td colspan="8" class="empty-row">Calculate a route to view the manifest.</td></tr></tbody>
+            <tbody id="table-body"><tr><td colspan="9" class="empty-row">Calculate a route to view the manifest.</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -292,6 +298,7 @@
 
     defaultToleranceMeters: 300, toleranceMinMeters: 10, toleranceMaxMeters: 5000,
     defaultAvgSpeedKmh: 90,
+    defaultDepartureTime: '06:00',
     maxRouteAlternatives: 3,
 
     basemapTileUrlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -337,6 +344,25 @@
   }
   function formatCoords(lat, lng) {
     return (typeof lat === 'number' && typeof lng === 'number') ? (lat.toFixed(5) + ', ' + lng.toFixed(5)) : '-';
+  }
+  // Departure time input ("HH:MM") -> minutes since midnight.
+  function getDepartureStartMinutes() {
+    var input = el('departure-time-input');
+    var val = input && input.value;
+    if (!val) return 0;
+    var parts = val.split(':');
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+  // Departure minutes + elapsed hours -> clock time, wrapping past
+  // midnight with a "+Nd" suffix for routes that span more than a day.
+  function formatClockTime(startMinutes, elapsedHours) {
+    if (!isFinite(elapsedHours) || elapsedHours < 0) return '-';
+    var totalMinutes = startMinutes + Math.round(elapsedHours * 60);
+    var dayOffset = Math.floor(totalMinutes / 1440);
+    var minsInDay = ((totalMinutes % 1440) + 1440) % 1440;
+    var hh = Math.floor(minsInDay / 60), mm = minsInDay % 60;
+    var str = (hh < 10 ? '0' : '') + hh + ':' + (mm < 10 ? '0' : '') + mm;
+    return dayOffset > 0 ? (str + ' (+' + dayOffset + 'd)') : str;
   }
   function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -398,7 +424,7 @@
     selectedDepWp: null, selectedArrWp: null,
     requiredStops: [],
     lastCalculatedRoute: null,
-    map: null, baseWaypointsLayerGroup: null, routeLayerGroup: null,
+    map: null, baseWaypointsLayerGroup: null, routeLayerGroup: null, networkBaseLine: null,
     isAddingWaypoint: false, pendingMarker: null,
     waypointsEditLayer: null,
     toastTimer: null
@@ -691,6 +717,7 @@
       buildGraphFromRouteFeatures(features);
       App.routesReady = true;
       updateDataStatus();
+      if (App.map) renderNetworkBaseLayer();
       checkReadyToCalculate();
     }).catch(function (err) {
       console.error('Routes load failed', err);
@@ -741,20 +768,41 @@
     return CONFIG.depArrTypes.some(function (t) { return String(t).toLowerCase() === lowerType; });
   }
 
+  // Coordination and Base waypoints are listed before Site waypoints
+  // (tie-broken by type name, then alphabetically) so the dropdown reads
+  // as classified groups rather than raw database order.
+  function comboTypePriority(type) {
+    return String(type || '').toLowerCase() === 'site' ? 1 : 0;
+  }
+
   function renderComboList(listNode, searchText, excludeIds, onSelect) {
     var lowerSearch = String(searchText || '').trim().toLowerCase();
     var candidates = App.waypoints.filter(isDepArrSelectable).filter(function (wp) { return excludeIds.indexOf(wp.id) === -1; });
     if (lowerSearch) candidates = candidates.filter(function (wp) { return String(wp.name || '').toLowerCase().indexOf(lowerSearch) !== -1; });
+    candidates = candidates.slice().sort(function (a, b) {
+      var pa = comboTypePriority(a.type), pb = comboTypePriority(b.type);
+      if (pa !== pb) return pa - pb;
+      if (a.type !== b.type) return String(a.type).localeCompare(String(b.type));
+      return String(a.name).localeCompare(String(b.name));
+    });
     candidates = candidates.slice(0, 50);
 
     listNode.innerHTML = '';
     if (candidates.length === 0) {
       listNode.innerHTML = '<div class="combo-empty">No matching waypoints</div>';
     } else {
+      var lastType = null;
       candidates.forEach(function (wp) {
+        if (wp.type !== lastType) {
+          lastType = wp.type;
+          var header = document.createElement('div');
+          header.className = 'combo-group-header';
+          header.textContent = wp.type || 'Other';
+          listNode.appendChild(header);
+        }
         var item = document.createElement('div');
         item.className = 'combo-item';
-        item.innerHTML = '<span>' + escapeHtml(wp.name) + '</span><span class="type">' + escapeHtml(wp.type) + '</span>';
+        item.innerHTML = '<span>' + escapeHtml(wp.name) + '</span>';
         item.addEventListener('click', function (evt) {
           evt.stopPropagation();
           onSelect(wp);
@@ -899,7 +947,7 @@
       var type = isFirst ? 'Start' : (isLast ? 'Finish' : 'Required Waypoint');
 
       items.push({
-        seq: seqIndex++, type: type,
+        seq: seqIndex++, type: type, id: node.wp.id,
         desc: (isFirst ? 'Departure (A): ' : isLast ? 'Arrival (B): ' : 'Required Waypoint: ') + node.wp.name + ' [ID: ' + node.wp.id + ']',
         shortName: node.wp.name, isKissPoint: node.wp.isKissPoint,
         lat: node.wp.lat, lng: node.wp.lng,
@@ -923,7 +971,7 @@
           lastLocationKm = dw.locationWithinLeg;
           items.push({
             seq: seqIndex++,
-            type: dw.wp.isKissPoint ? 'Vehicle Swap Point' : 'Pass-Through Waypoint',
+            type: dw.wp.isKissPoint ? 'Kisspoint' : 'Pass-Through Waypoint', id: dw.wp.id,
             desc: 'Waypoint: ' + dw.wp.name + ' [ID: ' + dw.wp.id + ']',
             shortName: dw.wp.name, isKissPoint: dw.wp.isKissPoint,
             lat: dw.wp.lat, lng: dw.wp.lng,
@@ -1067,6 +1115,7 @@
   function clearRouteDisplay() {
     if (App.routeLayerGroup) App.routeLayerGroup.clearLayers();
     setBaseWaypointsDimmed(false);
+    setNetworkLineDimmed(false);
     el('options-card').style.display = 'none';
     el('schematic-card').style.display = 'none';
     el('schematic-placeholder').style.display = 'block';
@@ -1100,12 +1149,12 @@
     var swapCount = res.detectedWaypoints.filter(function (w) { return w.wp.isKissPoint; }).length;
     var multiStop = res.orderedStopWaypoints.length > 2;
     var html = '<div class="metric-grid">' +
-      '<div class="metric"><div class="metric-val">' + res.totalDist.toFixed(2) + ' km</div><div class="metric-lbl">Total Distance</div></div>' +
+      '<div class="metric"><div class="metric-val">' + res.totalDist.toFixed(1) + ' km</div><div class="metric-lbl">Total Distance</div></div>' +
       '<div class="metric"><div class="metric-val">' + res.detectedWaypoints.length + '</div><div class="metric-lbl">En-route Waypoints</div></div>' +
       '<div class="metric wide"><div class="metric-val">' + formatDuration(res.totalDist / res.avgSpeedKmh) + '</div><div class="metric-lbl">Est. Travel Time (' + res.avgSpeedKmh + ' km/h)</div></div>' +
       '</div>';
     if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required waypoint(s), auto-ordered</div>';
-    if (swapCount > 0) html += '<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Vehicle Swap Point(s) Included</div>';
+    if (swapCount > 0) html += '<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Kisspoint(s) Included</div>';
     el('summary-card').style.display = 'block';
     el('summary-card').innerHTML = html;
   }
@@ -1152,7 +1201,7 @@
   }
 
   function resetTable() {
-    el('table-body').innerHTML = '<tr><td colspan="8" class="empty-row">Calculate a route to view the manifest.</td></tr>';
+    el('table-body').innerHTML = '<tr><td colspan="9" class="empty-row">Calculate a route to view the manifest.</td></tr>';
     el('export-btn').disabled = true;
   }
 
@@ -1170,15 +1219,17 @@
 
   function renderTableBreakdown(res) {
     var items = res.sequenceData;
+    var startMinutes = getDepartureStartMinutes();
     var html = '';
     items.forEach(function (item) {
       html += '<tr class="' + rowClassFor(item) + '"><td>' + item.seq + '</td>' +
         '<td>' + escapeHtml(item.shortName) + '</td>' +
-        '<td>' + (item.outboundLeg > 0 ? item.outboundLeg.toFixed(3) + ' km' : '-') + '</td>' +
-        '<td><strong>' + item.outboundCum.toFixed(3) + ' km</strong></td>' +
+        '<td>' + (item.outboundLeg > 0 ? item.outboundLeg.toFixed(1) + ' km' : '-') + '</td>' +
+        '<td><strong>' + item.outboundCum.toFixed(1) + ' km</strong></td>' +
         '<td>' + formatDuration(item.outboundTimeHrs) + '</td>' +
-        '<td class="ret-col">' + (item.returnLeg > 0 ? item.returnLeg.toFixed(3) + ' km' : '-') + '</td>' +
-        '<td class="ret-col"><strong>' + item.returnCum.toFixed(3) + ' km</strong></td>' +
+        '<td><strong>' + formatClockTime(startMinutes, item.outboundTimeHrs) + '</strong></td>' +
+        '<td class="ret-col">' + (item.returnLeg > 0 ? item.returnLeg.toFixed(1) + ' km' : '-') + '</td>' +
+        '<td class="ret-col"><strong>' + item.returnCum.toFixed(1) + ' km</strong></td>' +
         '<td class="ret-col">' + formatDuration(item.returnTimeHrs) + '</td></tr>';
     });
     el('table-body').innerHTML = html;
@@ -1195,16 +1246,44 @@
     App.routeLayerGroup = L.layerGroup().addTo(App.map);
     App.map.on('click', onMapClick);
     if (App.waypoints.length > 0) renderBaseWaypointsLayer();
+    if (App.routesReady) renderNetworkBaseLayer();
+  }
+
+  // Whole route network, drawn once as a single light-weight multi-segment
+  // polyline (all corridor segments already flattened in
+  // App.routeCoordSegments during graph construction). Visible faintly by
+  // default so the network's shape is legible; dropped to near-invisible
+  // once a route is calculated so the highlighted red route stands out.
+  var NETWORK_LINE_OPACITY_DEFAULT = 0.45;
+  var NETWORK_LINE_OPACITY_DIMMED = 0.1;
+
+  function renderNetworkBaseLayer() {
+    if (!App.map || !App.routeCoordSegments.length) return;
+    if (App.networkBaseLine) { App.map.removeLayer(App.networkBaseLine); }
+    var paths = App.routeCoordSegments.map(function (seg) {
+      return [[seg[0][1], seg[0][0]], [seg[1][1], seg[1][0]]];
+    });
+    App.networkBaseLine = L.polyline(paths, {
+      color: '#94a3b8', weight: 1.5,
+      opacity: App.lastCalculatedRoute ? NETWORK_LINE_OPACITY_DIMMED : NETWORK_LINE_OPACITY_DEFAULT,
+      interactive: false
+    }).addTo(App.map);
+    App.networkBaseLine.bringToBack();
+  }
+
+  function setNetworkLineDimmed(dimmed) {
+    if (!App.networkBaseLine) return;
+    App.networkBaseLine.setStyle({ opacity: dimmed ? NETWORK_LINE_OPACITY_DIMMED : NETWORK_LINE_OPACITY_DEFAULT });
   }
 
   function leafletIcon(kind, opts) {
     opts = opts || {};
-    if (kind === 'num') return L.divIcon({ className: '', html: '<div class="pin-num" style="background:' + opts.color + '">' + opts.label + '</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-    if (kind === 'kiss') return L.divIcon({ className: '', html: '<div class="pin-kiss">' + svgIcon('swap', 14, '#fff') + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
-    if (kind === 'req') return L.divIcon({ className: '', html: '<div class="pin-req">' + svgIcon('star', 13, '#fff') + '</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
-    if (kind === 'endpoint') return L.divIcon({ className: '', html: '<div class="pin-endpoint" style="background:' + opts.color + '"><span>' + opts.label + '</span></div>', iconSize: [24, 24], iconAnchor: [12, 22] });
-    if (kind === 'new') return L.divIcon({ className: '', html: '<div class="pin-new"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
-    return L.divIcon({ className: '', html: '<div class="pin-num" style="background:#94a3b8">?</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+    if (kind === 'num') return L.divIcon({ className: '', html: '<div class="pin-num" style="background:' + opts.color + '">' + opts.label + '</div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+    if (kind === 'kiss') return L.divIcon({ className: '', html: '<div class="pin-kiss">' + svgIcon('swap', 10, '#fff') + '</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+    if (kind === 'req') return L.divIcon({ className: '', html: '<div class="pin-req">' + svgIcon('star', 9, '#fff') + '</div>', iconSize: [17, 17], iconAnchor: [8, 8] });
+    if (kind === 'endpoint') return L.divIcon({ className: '', html: '<div class="pin-endpoint" style="background:' + opts.color + '"><span>' + opts.label + '</span></div>', iconSize: [18, 18], iconAnchor: [9, 16] });
+    if (kind === 'new') return L.divIcon({ className: '', html: '<div class="pin-new"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+    return L.divIcon({ className: '', html: '<div class="pin-num" style="background:#94a3b8">?</div>', iconSize: [14, 14], iconAnchor: [7, 7] });
   }
 
   function renderBaseWaypointsLayer() {
@@ -1212,7 +1291,7 @@
     App.baseWaypointsLayerGroup.clearLayers();
     App.waypoints.forEach(function (wp) {
       if (wp.lng == null || wp.lat == null) return;
-      var marker = L.circleMarker([wp.lat, wp.lng], { radius: 4, color: '#64748b', weight: 1, fillColor: '#94a3b8', fillOpacity: .75 });
+      var marker = L.circleMarker([wp.lat, wp.lng], { radius: 3, color: '#64748b', weight: 1, fillColor: '#94a3b8', fillOpacity: .75 });
       marker.bindTooltip(escapeHtml(wp.name), { direction: 'top' });
       marker.on('click', function (e) { L.DomEvent.stopPropagation(e); openEditWaypointForm(wp, marker); });
       marker.addTo(App.baseWaypointsLayerGroup);
@@ -1232,9 +1311,22 @@
     if (!App.map) return;
     App.routeLayerGroup.clearLayers();
     setBaseWaypointsDimmed(true);
+    setNetworkLineDimmed(true);
 
     var stops = res.orderedStopWaypoints;
     var connectorStyle = { color: '#d97706', weight: 3, dashArray: '5,5', opacity: .9 };
+
+    // Lookup by waypoint id -> its sequence-data entry, so tooltips can show
+    // cumulative distance and arrival time alongside the name.
+    var seqById = {};
+    res.sequenceData.forEach(function (item) { if (item.id != null) seqById[item.id] = item; });
+    var startMinutes = getDepartureStartMinutes();
+    function tooltipDetail(wpId) {
+      var item = seqById[wpId];
+      if (!item) return '';
+      return '<br/><span style="font-weight:600;color:#475569;">' + item.outboundCum.toFixed(1) + ' km &middot; ETA ' +
+        formatClockTime(startMinutes, item.outboundTimeHrs) + '</span>';
+    }
 
     stops.forEach(function (node) {
       L.polyline([[node.wp.lat, node.wp.lng], [node.snapped.coordinates[1], node.snapped.coordinates[0]]], connectorStyle).addTo(App.routeLayerGroup);
@@ -1245,8 +1337,9 @@
     res.detectedWaypoints.forEach(function (item) {
       var isKiss = item.wp.isKissPoint;
       var marker = L.marker([item.wp.lat, item.wp.lng], { icon: isKiss ? leafletIcon('kiss') : leafletIcon('num', { color: '#94a3b8', label: '•' }) }).addTo(App.routeLayerGroup);
-      marker.bindTooltip('<strong>' + escapeHtml(item.wp.name) + '</strong>', { permanent: isKiss, direction: 'top', offset: [0, -12] });
-      marker.bindPopup('<strong>' + escapeHtml(item.wp.name) + '</strong>' + (isKiss ? '<br/><span style="color:#d97706;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' + svgIcon('swap', 11, '#d97706') + ' Vehicle Swap Point</span>' : ''));
+      var tooltipHtml = '<strong>' + escapeHtml(item.wp.name) + '</strong>' + tooltipDetail(item.wp.id);
+      marker.bindTooltip(tooltipHtml, { permanent: isKiss, direction: 'top', offset: [0, -12] });
+      marker.bindPopup('<strong>' + escapeHtml(item.wp.name) + '</strong>' + (isKiss ? '<br/><span style="color:#d97706;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' + svgIcon('swap', 11, '#d97706') + ' Kisspoint</span>' : ''));
     });
 
     stops.forEach(function (node, i) {
@@ -1257,7 +1350,8 @@
       else { icon = leafletIcon('req'); }
       var marker = L.marker([node.wp.lat, node.wp.lng], { icon: icon }).addTo(App.routeLayerGroup);
       var label = isFirst ? ('A: ' + node.wp.name) : isLast ? ('B: ' + node.wp.name) : node.wp.name;
-      marker.bindTooltip('<strong>' + escapeHtml(label) + '</strong>', { permanent: true, direction: 'top', offset: [0, -20] });
+      var tooltipHtml = '<strong>' + escapeHtml(label) + '</strong>' + tooltipDetail(node.wp.id);
+      marker.bindTooltip(tooltipHtml, { permanent: true, direction: 'top', offset: [0, -20] });
     });
 
     var bounds = L.latLngBounds(res.routeCoords.map(function (c) { return [c[1], c[0]]; }));
@@ -1301,7 +1395,7 @@
       '<label>Name</label><input type="text" class="f-name" placeholder="Waypoint name" />' +
       '<label>Type</label><input type="text" class="f-type" list="dl-' + uid + '" placeholder="e.g. Coordination, Site..." />' +
       '<datalist id="dl-' + uid + '"></datalist>' +
-      '<div class="check"><input type="checkbox" class="f-kiss" id="kiss-' + uid + '"/><label for="kiss-' + uid + '" style="margin:0;text-transform:none;font-size:11.5px;">Vehicle Swap / Kiss Point</label></div>' +
+      '<div class="check"><input type="checkbox" class="f-kiss" id="kiss-' + uid + '"/><label for="kiss-' + uid + '" style="margin:0;text-transform:none;font-size:11.5px;">Kisspoint</label></div>' +
       '<div class="error"></div>' +
       '<div class="btn-row"></div>';
 
@@ -1517,6 +1611,7 @@
     App.lastCalculatedRoute = null;
     if (App.routeLayerGroup) App.routeLayerGroup.clearLayers();
     setBaseWaypointsDimmed(false);
+    setNetworkLineDimmed(false);
     el('summary-card').style.display = 'none'; el('summary-card').innerHTML = '';
     el('options-card').style.display = 'none'; el('options-card').innerHTML = '';
     el('schematic-card').style.display = 'none'; el('schematic').innerHTML = '';
@@ -1528,11 +1623,12 @@
   function onExportCsv() {
     if (!App.lastCalculatedRoute) return;
     var items = App.lastCalculatedRoute.sequenceData;
-    var csv = 'Seq,Type,Vehicle_Swap_Point,Waypoint_Name_Segment,Coordinates_Lat_Lng,Outbound_Leg_km,Outbound_Cum_Dist_km,Outbound_Time_to_Reach,Return_Leg_km,Return_Cum_Dist_km,Return_Time\n';
+    var startMinutes = getDepartureStartMinutes();
+    var csv = 'Seq,Type,Kisspoint,Waypoint_Name_Segment,Coordinates_Lat_Lng,Outbound_Leg_km,Outbound_Cum_Dist_km,Outbound_Time_to_Reach,Outbound_ETA,Return_Leg_km,Return_Cum_Dist_km,Return_Time\n';
     items.forEach(function (item) {
       csv += item.seq + ',"' + item.type + '","' + (item.isKissPoint ? 'Yes' : 'No') + '","' + String(item.desc).replace(/"/g, '""') + '","' + formatCoords(item.lat, item.lng) + '",' +
-        item.outboundLeg.toFixed(4) + ',' + item.outboundCum.toFixed(4) + ',"' + formatDuration(item.outboundTimeHrs) + '",' +
-        item.returnLeg.toFixed(4) + ',' + item.returnCum.toFixed(4) + ',"' + formatDuration(item.returnTimeHrs) + '"\n';
+        item.outboundLeg.toFixed(1) + ',' + item.outboundCum.toFixed(1) + ',"' + formatDuration(item.outboundTimeHrs) + '","' + formatClockTime(startMinutes, item.outboundTimeHrs) + '",' +
+        item.returnLeg.toFixed(1) + ',' + item.returnCum.toFixed(1) + ',"' + formatDuration(item.returnTimeHrs) + '"\n';
     });
     var blob = new Blob([csv], { type: 'text/csv' });
     var url = window.URL.createObjectURL(blob);
@@ -1556,6 +1652,13 @@
 
     el('tolerance-input').value = CONFIG.defaultToleranceMeters;
     el('speed-input').value = CONFIG.defaultAvgSpeedKmh;
+    el('departure-time-input').value = CONFIG.defaultDepartureTime;
+    el('departure-time-input').addEventListener('change', function () {
+      if (App.lastCalculatedRoute) {
+        renderTableBreakdown(App.lastCalculatedRoute);
+        renderSchematicDiagram(App.lastCalculatedRoute);
+      }
+    });
     el('tolerance-input').addEventListener('change', validateTolerance);
 
     el('calc-btn').addEventListener('click', function () {
