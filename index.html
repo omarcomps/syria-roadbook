@@ -7,7 +7,9 @@
 <link rel="stylesheet" href="widgets/RoutePlanner/libs/leaflet/leaflet.css" />
 <style>
   :root {
-    --primary: #0284c7; --primary-dark: #0369a1; --danger: #dc2626; --warning: #d97706;
+    /* MSF brand red, matching this app's own configured theme color (#d02327) */
+    --primary: #d02327; --primary-dark: #9c1a1d; --primary-tint: #fdecec; --primary-tint-2: #f8c9ca;
+    --arrival: #1e3a5f; --danger: #dc2626; --warning: #d97706;
     --kiss: #d97706; --gray: #94a3b8; --ink: #1e293b; --muted: #64748b;
   }
   * { box-sizing: border-box; }
@@ -15,12 +17,25 @@
   #app { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
 
   /* ---------------------------------------------------------------- SIDEBAR */
-  #sidebar { width: 400px; min-width: 400px; display: flex; flex-direction: column; background: #f8fafc; border-right: 1px solid #e2e8f0; }
+  #sidebar { width: 340px; min-width: 340px; display: flex; flex-direction: column; background: #f8fafc; border-right: 1px solid #e2e8f0; }
   #header { display: flex; align-items: center; gap: 10px; padding: 16px; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: #fff; flex-shrink: 0; }
   #header .icon { font-size: 22px; }
   #header .title { font-weight: 700; font-size: 15px; }
-  #header .sub { font-size: 11px; color: #e0f2fe; margin-top: 1px; }
+  #header .sub { font-size: 11px; color: #fadcdc; margin-top: 1px; }
   #scroll { flex: 1; overflow-y: auto; padding: 14px; }
+
+  /* ------------------------------------------------------------------ MAIN */
+  #main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #top-split { flex: 1 1 55%; min-height: 0; display: flex; }
+  #diagram-pane { width: 300px; min-width: 300px; background: #f8fafc; border-left: 1px solid #e2e8f0; padding: 13px; overflow-y: auto; }
+  #diagram-pane .card-title { margin-bottom: 9px; }
+  .diagram-placeholder { font-size: 11.5px; color: #94a3b8; font-style: italic; }
+
+  #bottom-panel { flex: 1 1 45%; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 13px; overflow-y: auto; border-top: 1px solid #e2e8f0; background: #fff; }
+  #kpi-row { display: flex; gap: 12px; flex-shrink: 0; }
+  #kpi-row .card { flex: 1; margin-bottom: 0; }
+  #table-card { flex: 1; min-height: 220px; display: flex; flex-direction: column; margin-bottom: 0; }
+  #table-card .table-wrap { flex: 1; max-height: none; }
 
   .status-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
   .status { font-size: 11px; color: var(--muted); background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 7px 10px; display: flex; align-items: center; gap: 6px; }
@@ -37,20 +52,20 @@
 
   .combo { position: relative; }
   input[type=text], input[type=number] { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; color: var(--ink); background: #fff; }
-  input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.15); }
+  input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(208,35,39,.15); }
   input:disabled { background: #f1f5f9; color: #94a3b8; }
   .combo-list { display: none; position: absolute; z-index: 20; top: calc(100% + 3px); left: 0; right: 0; max-height: 220px; overflow-y: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 20px rgba(15,23,42,.15); }
   .combo-list.open { display: block; }
   .combo-item { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
   .combo-item:last-child { border-bottom: none; }
-  .combo-item:hover { background: #e0f2fe; }
+  .combo-item:hover { background: var(--primary-tint); }
   .combo-item .type { float: right; font-size: 9.5px; color: #94a3b8; text-transform: uppercase; }
   .combo-empty { padding: 9px; color: #94a3b8; font-style: italic; }
 
   .chip-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-  .chip { display: flex; align-items: center; gap: 6px; background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 11px; font-weight: 600; }
-  .chip .x { cursor: pointer; width: 16px; height: 16px; border-radius: 50%; background: #bae6fd; display: flex; align-items: center; justify-content: center; font-size: 10px; }
-  .chip .x:hover { background: #7dd3fc; }
+  .chip { display: flex; align-items: center; gap: 6px; background: var(--primary-tint); border: 1px solid var(--primary-tint-2); color: var(--primary-dark); border-radius: 999px; padding: 4px 6px 4px 10px; font-size: 11px; font-weight: 600; }
+  .chip .x { cursor: pointer; width: 16px; height: 16px; border-radius: 50%; background: var(--primary-tint-2); display: flex; align-items: center; justify-content: center; font-size: 10px; }
+  .chip .x:hover { background: #f3a6a8; }
 
   .hint { font-size: 10px; color: #94a3b8; margin-top: 5px; }
   .hint.warn { color: #b45309; }
@@ -58,11 +73,11 @@
   .btn-row { display: flex; gap: 6px; margin-top: 11px; }
   .btn { flex: 1; padding: 10px 10px; border-radius: 6px; border: 1px solid transparent; font-size: 13px; font-weight: 700; cursor: pointer; }
   .btn:hover:not(:disabled) { filter: brightness(.95); }
-  .btn.primary { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(2,132,199,.35); }
+  .btn.primary { background: var(--primary); color: #fff; box-shadow: 0 2px 6px rgba(208,35,39,.35); }
   .btn.primary:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; }
   .btn.secondary { background: #fff; color: #334155; border-color: #cbd5e1; }
   .btn.secondary:disabled { color: #cbd5e1; cursor: not-allowed; }
-  .btn.outline { background: #fff; color: var(--primary); border-color: #bae6fd; }
+  .btn.outline { background: #fff; color: var(--primary); border-color: var(--primary-tint-2); }
   .btn.outline:disabled { color: #cbd5e1; border-color: #e2e8f0; cursor: not-allowed; }
   .btn.outline.active { background: var(--primary); color: #fff; border-color: var(--primary); }
   .btn.danger { background: #fff; color: var(--danger); border-color: #fecaca; }
@@ -74,7 +89,7 @@
   .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
   .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-  .metric { background: #f0f9ff; border: 1px solid #e0f2fe; border-radius: 6px; padding: 9px 10px; }
+  .metric { background: var(--primary-tint); border: 1px solid var(--primary-tint-2); border-radius: 6px; padding: 9px 10px; }
   .metric.wide { grid-column: 1/-1; }
   .metric-val { font-size: 16px; font-weight: 800; color: var(--primary-dark); }
   .metric-lbl { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-top: 1px; }
@@ -83,12 +98,12 @@
   .options-list { display: flex; flex-direction: column; gap: 6px; }
   .option { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
   .option:hover { border-color: var(--primary); }
-  .option.selected { border-color: var(--primary); background: #f0f9ff; }
+  .option.selected { border-color: var(--primary); background: var(--primary-tint); }
   .option-label { font-weight: 700; font-size: 11.5px; }
   .option-meta { font-size: 10.5px; color: var(--muted); display: flex; gap: 9px; margin-top: 3px; }
   .option-diff { color: #b45309; }
 
-  .schematic { max-height: 260px; overflow-y: auto; padding-left: 4px; border-left: 2px solid #cbd5e1; }
+  .schematic { padding-left: 4px; border-left: 2px solid #cbd5e1; }
   .schem-node { display: flex; align-items: center; gap: 7px; padding: 4px 0 4px 7px; min-height: 20px; }
   .schem-symbol { width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; flex-shrink: 0; margin-left: -11px; border: 2px solid #fff; box-shadow: 0 0 0 1px #cbd5e1; }
   .schem-symbol.dep { background: var(--primary); } .schem-symbol.arr { background: var(--danger); }
@@ -203,16 +218,33 @@
         </div>
         <button class="btn outline block" id="add-wp-btn" disabled>✚ Add Waypoint on Map</button>
       </div>
+    </div>
+  </div>
 
-      <div class="card" id="summary-card" style="display:none;"></div>
-      <div class="card" id="options-card" style="display:none;"></div>
-
-      <div class="card" id="schematic-card" style="display:none;">
-        <div class="card-title">Schematic Diagram</div>
-        <div class="schematic" id="schematic"></div>
+  <div id="main">
+    <div id="top-split">
+      <div id="map-pane">
+        <div id="map"></div>
+        <div class="map-hint" id="map-hint" style="display:none;"></div>
+        <div class="toast" id="toast" style="display:none;"></div>
       </div>
 
-      <div class="card">
+      <div id="diagram-pane">
+        <div class="card-title">Schematic Diagram</div>
+        <div class="diagram-placeholder" id="schematic-placeholder">Calculate a route to see the stop sequence.</div>
+        <div id="schematic-card" style="display:none;">
+          <div class="schematic" id="schematic"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="bottom-panel">
+      <div id="kpi-row">
+        <div class="card" id="summary-card" style="display:none;"></div>
+        <div class="card" id="options-card" style="display:none;"></div>
+      </div>
+
+      <div class="card" id="table-card">
         <div class="table-header">
           <span class="card-title" style="margin-bottom:0;">Route Manifest</span>
           <button class="btn secondary xs" id="export-btn" disabled>Export CSV</button>
@@ -227,12 +259,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <div id="map-pane">
-    <div id="map"></div>
-    <div class="map-hint" id="map-hint" style="display:none;"></div>
-    <div class="toast" id="toast" style="display:none;"></div>
   </div>
 </div>
 
@@ -1012,6 +1038,7 @@
     setBaseWaypointsDimmed(false);
     el('options-card').style.display = 'none';
     el('schematic-card').style.display = 'none';
+    el('schematic-placeholder').style.display = 'block';
     el('schematic').innerHTML = '';
     resetTable();
   }
@@ -1089,6 +1116,7 @@
         '<div class="schem-dist">' + item.outboundCum.toFixed(1) + ' km &middot; ' + formatDuration(item.outboundTimeHrs) + '</div></div>';
     });
     el('schematic-card').style.display = 'block';
+    el('schematic-placeholder').style.display = 'none';
     el('schematic').innerHTML = html;
   }
 
@@ -1099,10 +1127,10 @@
 
   function renderTableBreakdown(res) {
     var items = res.sequenceData;
-    var typeColors = { 'Start': '#0284c7', 'Finish': '#dc2626', 'Required Stop': '#7c3aed', 'Vehicle Swap Point': '#d97706', 'Pass-Through WP': '#94a3b8', 'Connector': '#d97706' };
+    var typeColors = { 'Start': '#d02327', 'Finish': '#1e3a5f', 'Required Stop': '#7c3aed', 'Vehicle Swap Point': '#d97706', 'Pass-Through WP': '#94a3b8', 'Connector': '#d97706' };
     var html = '';
     items.forEach(function (item) {
-      var color = typeColors[item.type] || '#0284c7';
+      var color = typeColors[item.type] || '#d02327';
       html += '<tr><td>' + item.seq + '</td>' +
         '<td><span style="color:' + color + ';font-weight:bold;">' + escapeHtml(item.type) + '</span></td>' +
         '<td>' + escapeHtml(item.desc) + '</td>' +
@@ -1172,7 +1200,7 @@
       L.polyline([[node.wp.lat, node.wp.lng], [node.snapped.coordinates[1], node.snapped.coordinates[0]]], connectorStyle).addTo(App.routeLayerGroup);
     });
 
-    L.polyline(res.routeCoords.map(function (c) { return [c[1], c[0]]; }), { color: '#0284c7', weight: 5, opacity: .9, lineCap: 'round' }).addTo(App.routeLayerGroup);
+    L.polyline(res.routeCoords.map(function (c) { return [c[1], c[0]]; }), { color: '#d02327', weight: 5, opacity: .9, lineCap: 'round' }).addTo(App.routeLayerGroup);
 
     res.detectedWaypoints.forEach(function (item) {
       var isKiss = item.wp.isKissPoint;
@@ -1184,8 +1212,8 @@
     stops.forEach(function (node, i) {
       var isFirst = i === 0, isLast = i === stops.length - 1;
       var icon;
-      if (isFirst) { icon = leafletIcon('endpoint', { color: '#0284c7', label: 'A' }); }
-      else if (isLast) { icon = leafletIcon('endpoint', { color: '#dc2626', label: 'B' }); }
+      if (isFirst) { icon = leafletIcon('endpoint', { color: '#d02327', label: 'A' }); }
+      else if (isLast) { icon = leafletIcon('endpoint', { color: '#1e3a5f', label: 'B' }); }
       else { icon = leafletIcon('req'); }
       var marker = L.marker([node.wp.lat, node.wp.lng], { icon: icon }).addTo(App.routeLayerGroup);
       var label = isFirst ? ('A: ' + node.wp.name) : isLast ? ('B: ' + node.wp.name) : node.wp.name;
@@ -1332,11 +1360,40 @@
   function getWaypointsEditLayer() {
     return new Promise(function (resolve, reject) {
       if (App.waypointsEditLayer && App.waypointsEditLayer.loaded) { resolve(App.waypointsEditLayer); return; }
-      require(['esri/layers/FeatureLayer', 'dojo/on'], function (FeatureLayer, on) {
-        if (!App.waypointsEditLayer) App.waypointsEditLayer = new FeatureLayer(CONFIG.waypointsLayerUrl, { mode: FeatureLayer.MODE_ONDEMAND });
+      require(['esri/layers/FeatureLayer'], function (FeatureLayer) {
+        if (!App.waypointsEditLayer) {
+          console.log('RouteEngine: constructing edit FeatureLayer for', CONFIG.waypointsLayerUrl);
+          App.waypointsEditLayer = new FeatureLayer(CONFIG.waypointsLayerUrl, { mode: FeatureLayer.MODE_ONDEMAND });
+        }
         var layerRef = App.waypointsEditLayer;
-        on.once(layerRef, 'load', function () { resolve(layerRef); });
-        on.once(layerRef, 'error', function (err) { reject(err); });
+        if (layerRef.loaded) { resolve(layerRef); return; }
+
+        var settled = false;
+        // Safety net: layer.on('load'/'error') has never been exercised
+        // successfully before this feature existed. If either event fails
+        // to fire for any reason, this timeout still surfaces a clear error
+        // instead of leaving "Saving waypoint..." spinning forever.
+        var timeoutId = setTimeout(function () {
+          if (settled) return;
+          settled = true;
+          console.error('RouteEngine: timed out waiting for Waypoints edit layer to load', layerRef);
+          reject(new Error('Timed out waiting for the Waypoints layer to load (15s). Check your connection, that you are signed in, and the browser console for details.'));
+        }, 15000);
+
+        layerRef.on('load', function () {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          console.log('RouteEngine: edit FeatureLayer loaded', layerRef);
+          resolve(layerRef);
+        });
+        layerRef.on('error', function (err) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeoutId);
+          console.error('RouteEngine: edit FeatureLayer failed to load', err);
+          reject((err && err.error) || err || new Error('Waypoints layer failed to load.'));
+        });
       });
     });
   }
@@ -1423,6 +1480,7 @@
     el('summary-card').style.display = 'none'; el('summary-card').innerHTML = '';
     el('options-card').style.display = 'none'; el('options-card').innerHTML = '';
     el('schematic-card').style.display = 'none'; el('schematic').innerHTML = '';
+    el('schematic-placeholder').style.display = 'block';
     resetTable();
     checkReadyToCalculate();
   }
