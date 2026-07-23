@@ -33,7 +33,7 @@
 
   #bottom-panel { flex: 1 1 45%; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 13px; overflow-y: auto; border-top: 1px solid #e2e8f0; background: #fff; }
   #kpi-row { display: flex; gap: 12px; flex-shrink: 0; }
-  #kpi-row .card { flex: 1; margin-bottom: 0; }
+  #kpi-row .card { flex: 1; margin-bottom: 0; padding: 9px 10px; }
   #table-card { flex: 1; min-height: 220px; display: flex; flex-direction: column; margin-bottom: 0; }
   #table-card .table-wrap { flex: 1; max-height: none; }
 
@@ -88,12 +88,13 @@
   .alert { border-radius: 6px; padding: 10px; font-size: 12px; line-height: 1.4; }
   .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
-  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-  .metric { background: var(--primary-tint); border: 1px solid var(--primary-tint-2); border-radius: 6px; padding: 9px 10px; }
-  .metric.wide { grid-column: 1/-1; }
-  .metric-val { font-size: 16px; font-weight: 800; color: var(--primary-dark); }
-  .metric-lbl { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-top: 1px; }
-  .swap-note { font-size: 11px; color: #b45309; font-weight: 700; margin-top: 8px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .metric { background: var(--primary-tint); border: 1px solid var(--primary-tint-2); border-radius: 6px; padding: 6px 9px; }
+  .metric.wide { grid-column: auto; }
+  .metric-val { font-size: 14px; font-weight: 800; color: var(--primary-dark); line-height: 1.25; }
+  .metric-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-top: 1px; white-space: nowrap; }
+  .swap-note { font-size: 10px; color: #b45309; font-weight: 700; margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+  .swap-note svg { flex-shrink: 0; }
 
   .options-list { display: flex; flex-direction: column; gap: 6px; }
   .option { border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 10px; cursor: pointer; }
@@ -128,8 +129,8 @@
   .toast.error { background: #b91c1c; } .toast.ok { background: #166534; }
 
   .pin-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
-  .pin-kiss { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 14px; font-weight: 700; background: var(--kiss); border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); }
-  .pin-req { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; background: #7c3aed; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+  .pin-kiss { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--kiss); border: 2px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.45); }
+  .pin-req { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #7c3aed; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
   .pin-endpoint { width: 24px; height: 24px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.45); }
   .pin-endpoint span { transform: rotate(45deg); }
   .pin-new { width: 18px; height: 18px; border-radius: 50%; background: #16a34a; border: 3px solid #fff; box-shadow: 0 0 0 2px #16a34a, 0 2px 6px rgba(0,0,0,.4); }
@@ -338,6 +339,19 @@
   }
   function el(id) { return document.getElementById(id); }
   function edgeId(a, b) { return a < b ? (a + '|' + b) : (b + '|' + a); }
+
+  // Crisp vector icons (SVG, not unicode glyphs) so symbols stay sharp at
+  // any size/DPI instead of relying on the system emoji/symbol font.
+  function svgIcon(name, size, color) {
+    size = size || 12; color = color || '#fff';
+    if (name === 'swap') {
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="none" stroke="' + color + '" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h14"/><path d="M13 4l4 4-4 4"/><path d="M21 16H7"/><path d="M11 20l-4-4 4-4"/></svg>';
+    }
+    if (name === 'star') {
+      return '<svg width="' + size + '" height="' + size + '" viewBox="0 0 24 24" fill="' + color + '"><path d="M12 2.5l2.95 6.62 7.05.66-5.35 4.9 1.6 7.32-6.25-3.82-6.25 3.82 1.6-7.32-5.35-4.9 7.05-.66z"/></svg>';
+    }
+    return '';
+  }
 
   function MinHeap() { this.items = []; }
   MinHeap.prototype.size = function () { return this.items.length; };
@@ -1086,8 +1100,8 @@
       '<div class="metric"><div class="metric-val">' + res.detectedWaypoints.length + '</div><div class="metric-lbl">En-route Stops</div></div>' +
       '<div class="metric wide"><div class="metric-val">' + formatDuration(res.totalDist / res.avgSpeedKmh) + '</div><div class="metric-lbl">Est. Travel Time (' + res.avgSpeedKmh + ' km/h)</div></div>' +
       '</div>';
-    if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">🧭 ' + (res.orderedStopWaypoints.length - 2) + ' required stop(s), auto-ordered</div>';
-    if (swapCount > 0) html += '<div class="swap-note">⇄ ' + swapCount + ' Vehicle Swap Point(s) Included</div>';
+    if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required stop(s), auto-ordered</div>';
+    if (swapCount > 0) html += '<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Vehicle Swap Point(s) Included</div>';
     el('summary-card').style.display = 'block';
     el('summary-card').innerHTML = html;
   }
@@ -1121,8 +1135,8 @@
       var cls = 'schem-symbol', icon = idx;
       if (isStart) { cls += ' dep'; icon = 'A'; }
       else if (isFinish) { cls += ' arr'; icon = 'B'; }
-      else if (isReq) { cls += ' req'; icon = '★'; }
-      else if (isKiss) { cls += ' kiss'; icon = '⇄'; }
+      else if (isReq) { cls += ' req'; icon = svgIcon('star', 11, '#fff'); }
+      else if (isKiss) { cls += ' kiss'; icon = svgIcon('swap', 11, '#fff'); }
       else { cls += ' wp'; }
       html += '<div class="schem-node"><div class="' + cls + '">' + icon + '</div>' +
         '<div class="schem-label" title="' + escapeHtml(item.shortName) + '">' + escapeHtml(item.shortName) + '</div>' +
@@ -1173,8 +1187,8 @@
   function leafletIcon(kind, opts) {
     opts = opts || {};
     if (kind === 'num') return L.divIcon({ className: '', html: '<div class="pin-num" style="background:' + opts.color + '">' + opts.label + '</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
-    if (kind === 'kiss') return L.divIcon({ className: '', html: '<div class="pin-kiss">&#8644;</div>', iconSize: [26, 26], iconAnchor: [13, 13] });
-    if (kind === 'req') return L.divIcon({ className: '', html: '<div class="pin-req">★</div>', iconSize: [22, 22], iconAnchor: [11, 11] });
+    if (kind === 'kiss') return L.divIcon({ className: '', html: '<div class="pin-kiss">' + svgIcon('swap', 14, '#fff') + '</div>', iconSize: [28, 28], iconAnchor: [14, 14] });
+    if (kind === 'req') return L.divIcon({ className: '', html: '<div class="pin-req">' + svgIcon('star', 13, '#fff') + '</div>', iconSize: [24, 24], iconAnchor: [12, 12] });
     if (kind === 'endpoint') return L.divIcon({ className: '', html: '<div class="pin-endpoint" style="background:' + opts.color + '"><span>' + opts.label + '</span></div>', iconSize: [24, 24], iconAnchor: [12, 22] });
     if (kind === 'new') return L.divIcon({ className: '', html: '<div class="pin-new"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
     return L.divIcon({ className: '', html: '<div class="pin-num" style="background:#94a3b8">?</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
@@ -1219,7 +1233,7 @@
       var isKiss = item.wp.isKissPoint;
       var marker = L.marker([item.wp.lat, item.wp.lng], { icon: isKiss ? leafletIcon('kiss') : leafletIcon('num', { color: '#94a3b8', label: '•' }) }).addTo(App.routeLayerGroup);
       marker.bindTooltip('<strong>' + escapeHtml(item.wp.name) + '</strong>', { permanent: isKiss, direction: 'top', offset: [0, -12] });
-      marker.bindPopup('<strong>' + escapeHtml(item.wp.name) + '</strong>' + (isKiss ? '<br/><span style="color:#d97706;font-weight:bold;">&#8644; Vehicle Swap Point</span>' : ''));
+      marker.bindPopup('<strong>' + escapeHtml(item.wp.name) + '</strong>' + (isKiss ? '<br/><span style="color:#d97706;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' + svgIcon('swap', 11, '#d97706') + ' Vehicle Swap Point</span>' : ''));
     });
 
     stops.forEach(function (node, i) {
