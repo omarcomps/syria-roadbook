@@ -1,0 +1,31 @@
+{
+  "_comment": "routesLayerUrl/waypointsLayerUrl are queried directly (preferred) -- these are hosted-service URLs, not dependent on the layer being added to the webmap. routesLayerTitle/waypointsLayerTitle are only used as a fallback (matched against operational layer titles in the map, case-insensitive) if the corresponding *LayerUrl is left blank.",
+
+  "routesLayerTitle": "Routes",
+  "routesLayerUrl": "https://geo.geomsf.org/server/rest/services/Hosted/syr_oca_ActiveRoutesDissolved_072026/FeatureServer/0",
+  "routeNameFields": ["Road", "road", "ROAD", "NAME", "Name", "name"],
+
+  "waypointsLayerTitle": "Waypoints",
+  "waypointsLayerUrl": "https://geo.geomsf.org/server/rest/services/Hosted/syr_oca_Raod_Waypoints_072026/FeatureServer/0",
+
+  "waypointFields": {
+    "idField": "fid",
+    "nameField": "name",
+    "typeField": "type",
+    "kissPointField": "kisspoint"
+  },
+
+  "_comment_kissPointValues": "kisspoint field values (case-insensitive) that count as a Vehicle Swap / Kiss Point. Anything else (including blank/No/0) counts as false.",
+  "kissPointTrueValues": ["yes", "y", "true", "1", "kiss", "kisspoint", "swap"],
+
+  "_comment_depArrTypes": "type field values (case-insensitive) selectable as Departure/Arrival endpoints. All other waypoints are pass-through stops only, auto-detected along the route.",
+  "depArrTypes": ["Coordination", "Base", "Site"],
+
+  "defaultToleranceMeters": 300,
+  "toleranceMinMeters": 10,
+  "toleranceMaxMeters": 5000,
+
+  "defaultAvgSpeedKmh": 40,
+
+  "maxRouteAlternatives": 3
+}
