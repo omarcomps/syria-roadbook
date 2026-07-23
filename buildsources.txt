@@ -1,3 +1,0 @@
-URL: WebGIS/arcgis-webappbuilder.git
-Branch: builds/windowslinux/11.5
-Commit: 5c46be2518e988336da614162c08b1866a22172a

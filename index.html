@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Travel Route Planner — OCA Syria</title>
-<link rel="stylesheet" href="widgets/RoutePlanner/libs/leaflet/leaflet.css" />
+<title>Roadbooks — OCA · Syria</title>
+<link rel="stylesheet" href="libs/leaflet/leaflet.css" />
 <style>
   :root {
     /* MSF brand red, matching this app's own configured theme color (#d02327) */
@@ -161,17 +161,15 @@
 <div id="app" style="display:none;">
   <div id="sidebar">
     <div id="header">
-      <div class="icon">🚚</div>
       <div>
-        <div class="title">Route Planner</div>
-        <div class="sub">OCA Syria · Network Routing</div>
+        <div class="title">Roadbooks</div>
+        <div class="sub">OCA · Syria</div>
       </div>
     </div>
 
     <div id="scroll">
       <div class="status-row">
-        <div class="status" id="routes-status">Loading Routes layer…</div>
-        <div class="status" id="waypoints-status">Loading Waypoints layer…</div>
+        <div class="status" id="data-status">Loading routes and waypoints data…</div>
       </div>
 
       <div class="card">
@@ -218,6 +216,8 @@
         </div>
         <button class="btn outline block" id="add-wp-btn" disabled>✚ Add Waypoint on Map</button>
       </div>
+
+      <div class="card" id="options-card" style="display:none;"></div>
     </div>
   </div>
 
@@ -241,7 +241,6 @@
     <div id="bottom-panel">
       <div id="kpi-row">
         <div class="card" id="summary-card" style="display:none;"></div>
-        <div class="card" id="options-card" style="display:none;"></div>
       </div>
 
       <div class="card" id="table-card">
@@ -262,7 +261,7 @@
   </div>
 </div>
 
-<script src="widgets/RoutePlanner/libs/leaflet/leaflet.js"></script>
+<script src="libs/leaflet/leaflet.js"></script>
 <script src="https://js.arcgis.com/3.46/"></script>
 <script>
 (function () {
@@ -287,7 +286,7 @@
     depArrTypes: ['Coordination', 'Base', 'Site'],
 
     defaultToleranceMeters: 300, toleranceMinMeters: 10, toleranceMaxMeters: 5000,
-    defaultAvgSpeedKmh: 40,
+    defaultAvgSpeedKmh: 90,
     maxRouteAlternatives: 3,
 
     basemapTileUrlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -377,7 +376,7 @@
     networkGraph: { nodes: {}, adj: {} },
     routeCoordSegments: [],
     nodeGrid: null, nodeGridMaxRadius: 0, gridCellDeg: 0.02,
-    routesReady: false, waypointsReady: false,
+    routesReady: false, waypointsReady: false, routesError: null, waypointsError: null,
     selectedDepWp: null, selectedArrWp: null,
     requiredStops: [],
     lastCalculatedRoute: null,
@@ -647,27 +646,42 @@
     });
   }
 
-  function loadRoutes() {
-    var statusEl = el('routes-status');
-    statusEl.textContent = 'Loading Routes layer…';
+  // Single combined status line instead of two separate per-layer lines
+  // with raw feature counts — simpler at a glance; failures still name
+  // which layer broke and why.
+  function updateDataStatus() {
+    var statusEl = el('data-status');
+    if (App.routesError || App.waypointsError) {
+      var msgs = [];
+      if (App.routesError) msgs.push('Routes: ' + App.routesError);
+      if (App.waypointsError) msgs.push('Waypoints: ' + App.waypointsError);
+      statusEl.textContent = msgs.join(' · ');
+      statusEl.className = 'status err';
+      return;
+    }
+    if (App.routesReady && App.waypointsReady) {
+      statusEl.textContent = 'Routes and waypoints data loaded';
+      statusEl.className = 'status ok';
+      return;
+    }
+    statusEl.textContent = 'Loading routes and waypoints data…';
     statusEl.className = 'status';
+  }
+
+  function loadRoutes() {
     queryAllFeatures(CONFIG.routesLayerUrl).then(function (features) {
       buildGraphFromRouteFeatures(features);
       App.routesReady = true;
-      statusEl.textContent = 'Loaded ' + features.length + ' route segments';
-      statusEl.className = 'status ok';
+      updateDataStatus();
       checkReadyToCalculate();
     }).catch(function (err) {
       console.error('Routes load failed', err);
-      statusEl.textContent = 'Failed to load Routes layer: ' + (err && err.message || err);
-      statusEl.className = 'status err';
+      App.routesError = (err && err.message) || String(err);
+      updateDataStatus();
     });
   }
 
   function loadWaypoints() {
-    var statusEl = el('waypoints-status');
-    statusEl.textContent = 'Loading Waypoints layer…';
-    statusEl.className = 'status';
     queryAllFeatures(CONFIG.waypointsLayerUrl).then(function (features) {
       var fields = CONFIG.waypointFields;
       var kissTrueValues = CONFIG.kissPointTrueValues.map(function (v) { return String(v).toLowerCase(); });
@@ -684,8 +698,7 @@
         };
       });
       App.waypointsReady = true;
-      statusEl.textContent = 'Loaded ' + App.waypoints.length + ' waypoints';
-      statusEl.className = 'status ok';
+      updateDataStatus();
 
       ['dep-input', 'arr-input', 'req-input'].forEach(function (id) { el(id).disabled = false; });
       el('dep-input').placeholder = 'Search departure...';
@@ -697,8 +710,8 @@
       checkReadyToCalculate();
     }).catch(function (err) {
       console.error('Waypoints load failed', err);
-      statusEl.textContent = 'Failed to load Waypoints layer: ' + (err && err.message || err);
-      statusEl.className = 'status err';
+      App.waypointsError = (err && err.message) || String(err);
+      updateDataStatus();
     });
   }
 
