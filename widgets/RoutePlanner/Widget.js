@@ -1,8 +1,11 @@
 // RoutePlanner widget — network-graph route calculator over the app's
-// live Routes (polyline) and Waypoints (point) feature layers.
-// Ported from the standalone "Routes Engine App" (Leaflet + Turf.js) onto
-// ArcGIS API for JavaScript 3.x, reading directly from the org's hosted
-// feature services instead of imported shapefiles.
+// live Routes (polyline) and Waypoints (point) hosted feature layers.
+//
+// Rendering runs on the widget's own embedded Leaflet map (vendored locally
+// under libs/leaflet/, not the app's shared ArcGIS Map) for speed and a
+// simpler lng/lat-native rendering path — no spatial-reference projection
+// needed. Data access (query + edit) still goes through the ArcGIS JS API
+// against the hosted feature services directly by URL.
 //
 // Written in ES5 throughout (var, function expressions, string
 // concatenation) to match this app's stated IE11 support requirement.
@@ -18,25 +21,15 @@ define([
   'dojo/text!./Widget.html',
   'esri/tasks/query',
   'esri/tasks/QueryTask',
-  'esri/tasks/GeometryService',
+  'esri/layers/FeatureLayer',
   'esri/graphic',
-  'esri/layers/GraphicsLayer',
   'esri/geometry/Point',
-  'esri/geometry/Polyline',
-  'esri/geometry/Extent',
-  'esri/geometry/webMercatorUtils',
-  'esri/SpatialReference',
-  'esri/symbols/SimpleMarkerSymbol',
-  'esri/symbols/SimpleLineSymbol',
-  'esri/symbols/TextSymbol',
-  'esri/symbols/Font',
-  'esri/Color'
+  'esri/SpatialReference'
 ], function (
   declare, lang, array, on, domConstruct, domClass, Deferred,
   BaseWidget, template,
-  EsriQuery, QueryTask, GeometryService,
-  Graphic, GraphicsLayer, Point, Polyline, Extent, webMercatorUtils, SpatialReference,
-  SimpleMarkerSymbol, SimpleLineSymbol, TextSymbol, Font, Color
+  EsriQuery, QueryTask, FeatureLayer,
+  Graphic, EsriPoint, SpatialReference
 ) {
 
   // ======================================================================
@@ -163,9 +156,11 @@ define([
       this.lastCalculatedRoute = null;
       this._routesReady = false;
       this._waypointsReady = false;
-
-      this.graphicsLayer = new GraphicsLayer({ id: this.id + '_routeGraphics' });
-      this.map.addLayer(this.graphicsLayer);
+      this._waypointsLayerUrl = null;
+      this._waypointsEditLayer = null;
+      this._isAddingWaypoint = false;
+      this._pendingWaypointMarker = null;
+      this._toastTimer = null;
 
       this.own(on(this.calcBtn, 'click', lang.hitch(this, this.onCalculateClick)));
       this.own(on(this.resetBtn, 'click', lang.hitch(this, this.onResetClick)));
@@ -175,24 +170,33 @@ define([
 
       this.toleranceInput.value = this.config.defaultToleranceMeters || 300;
       this.speedInput.value = this.config.defaultAvgSpeedKmh || 40;
+
+      // Data loading (ArcGIS QueryTask, independent of the app's ArcGIS Map)
+      // and Leaflet asset loading run in parallel — nothing here waits on
+      // the app's shared Map component being ready.
+      this._loadNetworkData();
+      this._loadLeafletAssets().then(lang.hitch(this, function () {
+        this._initLeafletMap();
+      }), function (err) {
+        console.error('RoutePlanner: failed to load Leaflet', err);
+      });
     },
 
-    startup: function () {
+    onOpen: function () {
       this.inherited(arguments);
-      if (this.map.loaded) {
-        this._loadNetworkData();
-      } else {
-        this.own(on.once(this.map, 'load', lang.hitch(this, this._loadNetworkData)));
+      if (this.leafletMap) {
+        var self = this;
+        setTimeout(function () { self.leafletMap.invalidateSize(); }, 0);
       }
     },
 
     destroy: function () {
-      if (this.graphicsLayer) { this.map.removeLayer(this.graphicsLayer); }
+      if (this.leafletMap) { this.leafletMap.remove(); this.leafletMap = null; }
       this.inherited(arguments);
     },
 
-    _injectCss: function () {
-      var href = this.folderUrl + 'css/style.css';
+    _injectCss: function (href) {
+      href = href || (this.folderUrl + 'css/style.css');
       var existing = document.querySelectorAll('link[href="' + href + '"]');
       if (existing.length === 0) {
         domConstruct.create('link', { rel: 'stylesheet', href: href }, document.head);
@@ -207,9 +211,130 @@ define([
       domClass.remove(this.loadingOverlayNode, 'rp-active');
     },
 
+    _showToast: function (msg, isError) {
+      if (this._toastTimer) { clearTimeout(this._toastTimer); this._toastTimer = null; }
+      this.toastNode.innerHTML = escapeHtml(msg);
+      this.toastNode.className = 'rp-toast ' + (isError ? 'rp-toast-error' : 'rp-toast-ok');
+      this.toastNode.style.display = 'block';
+      var self = this;
+      this._toastTimer = setTimeout(function () { self.toastNode.style.display = 'none'; }, 4000);
+    },
+
     // ====================================================================
-    // DATA LOADING — resolve Routes/Waypoints layers from the webmap by
-    // title, query every feature (paged), build the routing graph.
+    // LEAFLET MAP (widget's own embedded map — independent of the app's
+    // shared ArcGIS Map, vendored locally so it works without CDN access).
+    // ====================================================================
+    _loadLeafletAssets: function () {
+      var deferred = new Deferred();
+      if (window.L) { deferred.resolve(window.L); return deferred.promise; }
+
+      this._injectCss(this.folderUrl + 'libs/leaflet/leaflet.css');
+
+      var existingScript = document.querySelector('script[data-rp-leaflet]');
+      if (existingScript) {
+        on.once(existingScript, 'load', function () { deferred.resolve(window.L); });
+        on.once(existingScript, 'error', function (err) { deferred.reject(err); });
+        return deferred.promise;
+      }
+
+      var script = document.createElement('script');
+      script.setAttribute('data-rp-leaflet', '1');
+      script.src = this.folderUrl + 'libs/leaflet/leaflet.js';
+      script.onload = function () { deferred.resolve(window.L); };
+      script.onerror = function (err) { deferred.reject(err); };
+      document.head.appendChild(script);
+
+      return deferred.promise;
+    },
+
+    _initLeafletMap: function () {
+      var L = window.L;
+      this.leafletMap = L.map(this.mapNode, {
+        center: [35.0, 38.2],
+        zoom: 7,
+        preferCanvas: true
+      });
+
+      L.tileLayer(this.config.basemapTileUrlTemplate, {
+        attribution: this.config.basemapAttribution || '',
+        maxZoom: this.config.basemapMaxZoom || 19
+      }).addTo(this.leafletMap);
+
+      this.baseWaypointsLayerGroup = L.layerGroup().addTo(this.leafletMap);
+      this.routeLayerGroup = L.layerGroup().addTo(this.leafletMap);
+
+      // Leaflet's map object isn't a DOM node, and dojo/on's duck-typed
+      // delegation to a target's own .on/.off is unverified for it here —
+      // bind directly with Leaflet's native event API instead. No manual
+      // unbind needed: leafletMap.remove() in destroy() tears down all of
+      // the map's own listeners internally.
+      this.leafletMap.on('click', lang.hitch(this, this._onMapClick));
+
+      if (this.waypoints.length > 0) this._renderBaseWaypointsLayer();
+    },
+
+    _leafletIcon: function (kind, opts) {
+      var L = window.L;
+      opts = opts || {};
+      if (kind === 'num') {
+        return L.divIcon({
+          className: 'rp-map-icon',
+          html: '<div class="rp-pin-num" style="background:' + opts.color + '">' + opts.label + '</div>',
+          iconSize: [20, 20], iconAnchor: [10, 10]
+        });
+      }
+      if (kind === 'kiss') {
+        return L.divIcon({
+          className: 'rp-map-icon',
+          html: '<div class="rp-pin-kiss">&#8644;</div>',
+          iconSize: [26, 26], iconAnchor: [13, 13]
+        });
+      }
+      if (kind === 'endpoint') {
+        return L.divIcon({
+          className: 'rp-map-icon',
+          html: '<div class="rp-pin-endpoint" style="background:' + opts.color + '"><span>' + opts.label + '</span></div>',
+          iconSize: [24, 24], iconAnchor: [12, 22]
+        });
+      }
+      if (kind === 'new') {
+        return L.divIcon({ className: 'rp-map-icon', html: '<div class="rp-pin-new"></div>', iconSize: [18, 18], iconAnchor: [9, 9] });
+      }
+      return L.divIcon({ className: 'rp-map-icon', html: '<div class="rp-pin-num" style="background:#94a3b8">?</div>', iconSize: [20, 20], iconAnchor: [10, 10] });
+    },
+
+    _renderBaseWaypointsLayer: function () {
+      if (!this.leafletMap) return;
+      var L = window.L;
+      this.baseWaypointsLayerGroup.clearLayers();
+      array.forEach(this.waypoints, function (wp) {
+        if (wp.lng == null || wp.lat == null) return;
+        L.circleMarker([wp.lat, wp.lng], {
+          radius: 4, color: '#64748b', weight: 1, fillColor: '#94a3b8', fillOpacity: 0.75
+        }).bindTooltip(escapeHtml(wp.name), { direction: 'top' }).addTo(this.baseWaypointsLayerGroup);
+      }, this);
+
+      if (!this.lastCalculatedRoute) {
+        var pts = array.filter(this.waypoints, function (w) { return w.lat != null && w.lng != null; })
+          .map(function (w) { return [w.lat, w.lng]; });
+        if (pts.length > 0) {
+          var bounds = L.latLngBounds(pts);
+          if (bounds.isValid()) this.leafletMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 10 });
+        }
+      }
+    },
+
+    _setBaseWaypointsDimmed: function (dimmed) {
+      if (!this.baseWaypointsLayerGroup) return;
+      this.baseWaypointsLayerGroup.eachLayer(function (l) {
+        l.setStyle({ opacity: dimmed ? 0.25 : 1, fillOpacity: dimmed ? 0.2 : 0.75 });
+      });
+    },
+
+    // ====================================================================
+    // DATA LOADING — resolve Routes/Waypoints layers by configured URL
+    // (falling back to a title match in the app's ArcGIS Map, if present),
+    // query every feature (paged), build the routing graph.
     // ====================================================================
     _findOperationalLayerDefByTitle: function (opLayers, title) {
       var lowerTitle = String(title || '').toLowerCase();
@@ -246,7 +371,7 @@ define([
         return { url: configuredUrl, source: 'configured URL' };
       }
 
-      var opLayers = (this.map.itemInfo && this.map.itemInfo.itemData &&
+      var opLayers = (this.map && this.map.itemInfo && this.map.itemInfo.itemData &&
         this.map.itemInfo.itemData.operationalLayers) || [];
       var title = this.config[titleConfigKey];
       var def = this._findOperationalLayerDefByTitle(opLayers, title);
@@ -360,6 +485,7 @@ define([
         this._onWaypointsError(err);
         return;
       }
+      this._waypointsLayerUrl = layerInfo.url;
       this._queryAllFeatures(layerInfo.url).then(lang.hitch(this, function (features) {
         try {
           var fields = this.config.waypointFields || {};
@@ -391,8 +517,11 @@ define([
 
           this.depInput.disabled = false;
           this.arrInput.disabled = false;
+          this.addWaypointBtn.disabled = false;
           this.depInput.placeholder = 'Search departure...';
           this.arrInput.placeholder = 'Search arrival...';
+
+          if (this.leafletMap) this._renderBaseWaypointsLayer();
 
           this._checkReadyToCalculate();
         } catch (err) {
@@ -408,7 +537,7 @@ define([
     },
 
     // ====================================================================
-    // GRAPH ENGINE — ported from the standalone app (turf.distance -> haversineKm)
+    // GRAPH ENGINE
     // ====================================================================
     _pickRoadName: function (attrs) {
       var candidates = this.config.routeNameFields || ['Road', 'road', 'NAME', 'Name', 'name'];
@@ -457,8 +586,7 @@ define([
 
     // Bridges dead-end (degree-1) vertices to their nearest neighbor within
     // SNAP_TOLERANCE_KM — corrects hand-digitized junction gaps without a
-    // blanket merge that could weld unrelated roads together. See the
-    // standalone app's original comment for the full rationale.
+    // blanket merge that could weld unrelated roads together.
     _mergeNearbyGraphNodes: function () {
       var SNAP_TOLERANCE_KM = 0.1; // 100m
       var nodes = this.networkGraph.nodes, adj = this.networkGraph.adj;
@@ -824,11 +952,7 @@ define([
 
       if (!snappedDep || !snappedArr) {
         this._showSummaryError('Route Unreachable', 'No route network was found near the selected waypoints.');
-        this.graphicsLayer.clear();
-        this.optionsNode.style.display = 'none';
-        this.schematicSection.style.display = 'none';
-        this.schematicNode.innerHTML = '';
-        this._resetTable();
+        this._clearRouteDisplay();
         return;
       }
 
@@ -844,11 +968,7 @@ define([
 
       if (pathAlternatives.length === 0) {
         this._showSummaryError('Route Unreachable', 'No continuous network route found between the selected waypoints.');
-        this.graphicsLayer.clear();
-        this.optionsNode.style.display = 'none';
-        this.schematicSection.style.display = 'none';
-        this.schematicNode.innerHTML = '';
-        this._resetTable();
+        this._clearRouteDisplay();
         return;
       }
 
@@ -859,6 +979,15 @@ define([
       });
 
       this._selectRouteAlternative(routeAlternatives, 0);
+    },
+
+    _clearRouteDisplay: function () {
+      if (this.routeLayerGroup) this.routeLayerGroup.clearLayers();
+      this._setBaseWaypointsDimmed(false);
+      this.optionsNode.style.display = 'none';
+      this.schematicSection.style.display = 'none';
+      this.schematicNode.innerHTML = '';
+      this._resetTable();
     },
 
     _showSummaryError: function (title, msg) {
@@ -877,7 +1006,6 @@ define([
         routeCoords.push(edge.coords[1]);
       });
 
-      var self = this;
       var detectedWaypoints = [];
       array.forEach(this.waypoints, function (wp) {
         if (wp.id === depWp.id || wp.id === arrWp.id) return;
@@ -999,7 +1127,7 @@ define([
     },
 
     // ====================================================================
-    // RENDERING
+    // RENDERING — SIDEBAR
     // ====================================================================
     _renderSummaryCard: function (res) {
       var swapCount = 0;
@@ -1016,7 +1144,7 @@ define([
         '</div>';
 
       if (swapCount > 0) {
-        html += '<div class="rp-swap-note">' + swapCount + ' Vehicle Swap Point(s) Included</div>';
+        html += '<div class="rp-swap-note">&#8644; ' + swapCount + ' Vehicle Swap Point(s) Included</div>';
       }
 
       this.summaryNode.style.display = 'block';
@@ -1056,6 +1184,8 @@ define([
       });
     },
 
+    // Waypoint-only "directions" — no turn-by-turn, just the stop sequence
+    // with distance and time-to-reach, and kiss points visually flagged.
     _renderSchematicDiagram: function (res) {
       var items = res.sequenceData;
       var html = '';
@@ -1113,135 +1243,238 @@ define([
     },
 
     // ====================================================================
-    // MAP RENDERING — project lng/lat (WGS84) geometries into the map's
-    // spatial reference before drawing.
+    // RENDERING — LEAFLET MAP
     // ====================================================================
-    _projectLngLatArrayToMapSR: function (coordsArray) {
-      var deferred = new Deferred();
-      var mapSR = this.map.spatialReference;
-      var wkid = mapSR && (mapSR.wkid || mapSR.latestWkid);
-
-      if (wkid === 4326 || wkid === 4269) {
-        deferred.resolve(coordsArray.slice());
-        return deferred.promise;
-      }
-
-      if (wkid === 3857 || wkid === 102100 || wkid === 102113) {
-        var out = array.map(coordsArray, function (c) {
-          return webMercatorUtils.lngLatToXY(c[0], c[1]);
-        });
-        deferred.resolve(out);
-        return deferred.promise;
-      }
-
-      // Arbitrary projected SR — fall back to the app's configured GeometryService.
-      var gsUrl = this.appConfig && this.appConfig.geometryService;
-      if (!gsUrl) {
-        deferred.reject(new Error('Map spatial reference (wkid ' + wkid + ') is not WGS84/Web Mercator, and no geometryService is configured to reproject into it.'));
-        return deferred.promise;
-      }
-      var gs = new GeometryService(gsUrl);
-      var pts = array.map(coordsArray, function (c) {
-        return new Point(c[0], c[1], new SpatialReference({ wkid: 4326 }));
-      });
-      gs.project(pts, mapSR, function (projected) {
-        deferred.resolve(array.map(projected, function (p) { return [p.x, p.y]; }));
-      }, function (err) { deferred.reject(err); });
-
-      return deferred.promise;
-    },
-
     _renderRouteOnMap: function (res) {
-      this.graphicsLayer.clear();
-      var self = this;
-      var mapSR = this.map.spatialReference;
+      if (!this.leafletMap) return;
+      var L = window.L;
+      this.routeLayerGroup.clearLayers();
+      this._setBaseWaypointsDimmed(true);
 
       var depSnap = res.snappedDep.coordinates;
       var arrSnap = res.snappedArr.coordinates;
 
-      var allCoords = [
-        [res.depWp.lng, res.depWp.lat], depSnap
-      ].concat(res.routeCoords).concat([
-        arrSnap, [res.arrWp.lng, res.arrWp.lat]
-      ]);
-      array.forEach(res.detectedWaypoints, function (item) {
-        allCoords.push([item.wp.lng, item.wp.lat]);
+      var connectorStyle = { color: '#d97706', weight: 3, dashArray: '5, 5', opacity: 0.9 };
+      L.polyline([
+        [res.depWp.lat, res.depWp.lng],
+        [depSnap[1], depSnap[0]]
+      ], connectorStyle).addTo(this.routeLayerGroup);
+      L.polyline([
+        [arrSnap[1], arrSnap[0]],
+        [res.arrWp.lat, res.arrWp.lng]
+      ], connectorStyle).addTo(this.routeLayerGroup);
+
+      L.polyline(
+        array.map(res.routeCoords, function (c) { return [c[1], c[0]]; }),
+        { color: '#0284c7', weight: 5, opacity: 0.9, lineCap: 'round' }
+      ).addTo(this.routeLayerGroup);
+
+      var self = this;
+      array.forEach(res.detectedWaypoints, function (item, idx) {
+        var isKiss = item.wp.isKissPoint;
+        var icon = isKiss ? self._leafletIcon('kiss') : self._leafletIcon('num', { color: '#94a3b8', label: idx + 1 });
+        var marker = L.marker([item.wp.lat, item.wp.lng], { icon: icon }).addTo(self.routeLayerGroup);
+        var cum = (res.depConnectorDist + item.locationKm).toFixed(1);
+        marker.bindTooltip(
+          '<strong>' + escapeHtml(item.wp.name) + '</strong> (' + cum + ' km)',
+          { permanent: isKiss, direction: 'top', offset: [0, -12], className: 'rp-map-tooltip' }
+        );
+        marker.bindPopup(
+          '<strong>Stop #' + (idx + 1) + ': ' + escapeHtml(item.wp.name) + '</strong><br/>' +
+          (isKiss ? '<span style="color:#d97706;font-weight:bold;">&#8644; Vehicle Swap Point</span><br/>' : '') +
+          'Cumulative Dist: ' + cum + ' km'
+        );
       });
 
-      this._projectLngLatArrayToMapSR(allCoords).then(function (projected) {
-        var idx = 0;
-        var depXY = projected[idx++], depSnapXY = projected[idx++];
-        var routeXY = [];
-        for (var i = 0; i < res.routeCoords.length; i++) routeXY.push(projected[idx++]);
-        var arrSnapXY = projected[idx++], arrXY = projected[idx++];
-        var stopXYs = [];
-        for (var s = 0; s < res.detectedWaypoints.length; s++) stopXYs.push(projected[idx++]);
+      L.marker([res.depWp.lat, res.depWp.lng], { icon: this._leafletIcon('endpoint', { color: '#0284c7', label: 'A' }) })
+        .addTo(this.routeLayerGroup)
+        .bindTooltip('<strong>A: ' + escapeHtml(res.depWp.name) + '</strong>', { permanent: true, direction: 'top', offset: [0, -22], className: 'rp-map-tooltip' });
+      L.marker([res.arrWp.lat, res.arrWp.lng], { icon: this._leafletIcon('endpoint', { color: '#dc2626', label: 'B' }) })
+        .addTo(this.routeLayerGroup)
+        .bindTooltip('<strong>B: ' + escapeHtml(res.arrWp.name) + '</strong>', { permanent: true, direction: 'top', offset: [0, -22], className: 'rp-map-tooltip' });
 
-        // Connector links (dashed orange)
-        var connectorSym = new SimpleLineSymbol(SimpleLineSymbol.STYLE_DASH, new Color([217, 119, 6]), 3);
-        self.graphicsLayer.add(new Graphic(new Polyline({ paths: [[depXY, depSnapXY]], spatialReference: mapSR }), connectorSym));
-        self.graphicsLayer.add(new Graphic(new Polyline({ paths: [[arrSnapXY, arrXY]], spatialReference: mapSR }), connectorSym));
-
-        // Main route
-        var routeSym = new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([2, 132, 199]), 5);
-        self.graphicsLayer.add(new Graphic(new Polyline({ paths: [routeXY], spatialReference: mapSR }), routeSym));
-
-        // Stops
-        array.forEach(res.detectedWaypoints, function (item, i) {
-          var isKiss = item.wp.isKissPoint;
-          var sym = new SimpleMarkerSymbol(
-            SimpleMarkerSymbol.STYLE_CIRCLE, isKiss ? 14 : 10,
-            new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([255, 255, 255]), 1.5),
-            new Color(isKiss ? [217, 119, 6] : [148, 163, 184])
-          );
-          self.graphicsLayer.add(new Graphic(new Point(stopXYs[i][0], stopXYs[i][1], mapSR), sym));
-
-          if (isKiss) {
-            var lbl = new TextSymbol(item.wp.name)
-              .setColor(new Color([217, 119, 6]))
-              .setOffset(0, 14)
-              .setFont(new Font('10pt').setWeight(Font.WEIGHT_BOLD));
-            self.graphicsLayer.add(new Graphic(new Point(stopXYs[i][0], stopXYs[i][1], mapSR), lbl));
-          }
-        });
-
-        // Departure (A) / Arrival (B)
-        var depSym = new SimpleMarkerSymbol(SimpleMarkerSymbol.STYLE_SQUARE, 14,
-          new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([255, 255, 255]), 2),
-          new Color([2, 132, 199]));
-        var arrSym = new SimpleMarkerSymbol(SimpleMarkerSymbol.STYLE_DIAMOND, 16,
-          new SimpleLineSymbol(SimpleLineSymbol.STYLE_SOLID, new Color([255, 255, 255]), 2),
-          new Color([220, 38, 38]));
-
-        self.graphicsLayer.add(new Graphic(new Point(depXY[0], depXY[1], mapSR), depSym));
-        self.graphicsLayer.add(new Graphic(new Point(arrXY[0], arrXY[1], mapSR), arrSym));
-
-        var depLbl = new TextSymbol('A: ' + res.depWp.name)
-          .setColor(new Color([2, 132, 199])).setOffset(0, 16)
-          .setFont(new Font('10pt').setWeight(Font.WEIGHT_BOLD));
-        var arrLbl = new TextSymbol('B: ' + res.arrWp.name)
-          .setColor(new Color([220, 38, 38])).setOffset(0, 16)
-          .setFont(new Font('10pt').setWeight(Font.WEIGHT_BOLD));
-        self.graphicsLayer.add(new Graphic(new Point(depXY[0], depXY[1], mapSR), depLbl));
-        self.graphicsLayer.add(new Graphic(new Point(arrXY[0], arrXY[1], mapSR), arrLbl));
-
-        self._fitMapToGraphics();
-      }, function (err) {
-        console.error('RoutePlanner: failed to project route geometry to map spatial reference', err);
-      });
+      var bounds = L.latLngBounds(array.map(res.routeCoords, function (c) { return [c[1], c[0]]; }));
+      bounds.extend([res.depWp.lat, res.depWp.lng]);
+      bounds.extend([res.arrWp.lat, res.arrWp.lng]);
+      this.leafletMap.fitBounds(bounds, { padding: [30, 30] });
     },
 
-    _fitMapToGraphics: function () {
-      var extent = null;
-      array.forEach(this.graphicsLayer.graphics, function (g) {
-        var ge = g.geometry.getExtent ? g.geometry.getExtent() : null;
-        if (!ge && g.geometry.x !== undefined) {
-          ge = new Extent(g.geometry.x, g.geometry.y, g.geometry.x, g.geometry.y, g.geometry.spatialReference);
-        }
-        if (!ge) return;
-        extent = extent ? extent.union(ge) : ge;
+    // ====================================================================
+    // ADD WAYPOINT TOOL
+    // ====================================================================
+    _onToggleAddWaypoint: function () {
+      this._setAddingMode(!this._isAddingWaypoint);
+    },
+
+    _setAddingMode: function (active) {
+      this._isAddingWaypoint = active;
+      domClass.toggle(this.addWaypointBtn, 'rp-active', active);
+      this.addWaypointBtn.innerHTML = active ? 'Cancel Adding Waypoint' : '&#10010; Add Waypoint on Map';
+      this.mapHintNode.style.display = active ? 'block' : 'none';
+      if (this.leafletMap) {
+        this.leafletMap.getContainer().style.cursor = active ? 'crosshair' : '';
+      }
+      if (!active && this._pendingWaypointMarker) {
+        this.leafletMap.removeLayer(this._pendingWaypointMarker);
+        this._pendingWaypointMarker = null;
+      }
+    },
+
+    _onMapClick: function (e) {
+      if (!this._isAddingWaypoint) return;
+      if (this._pendingWaypointMarker) {
+        this.leafletMap.removeLayer(this._pendingWaypointMarker);
+        this._pendingWaypointMarker = null;
+      }
+      this._openAddWaypointForm(e.latlng);
+    },
+
+    _openAddWaypointForm: function (latlng) {
+      var L = window.L;
+      var self = this;
+      var marker = L.marker(latlng, { icon: this._leafletIcon('new'), draggable: true }).addTo(this.leafletMap);
+      this._pendingWaypointMarker = marker;
+
+      var knownTypes = [];
+      array.forEach(this.waypoints, function (wp) {
+        if (wp.type && array.indexOf(knownTypes, wp.type) === -1) knownTypes.push(wp.type);
       });
-      if (extent) this.map.setExtent(extent.expand(1.3), true);
+
+      var form = domConstruct.create('div', { className: 'rp-popup-form' });
+      domConstruct.create('label', { innerHTML: 'Name' }, form);
+      var nameInput = domConstruct.create('input', { type: 'text', placeholder: 'Waypoint name' }, form);
+
+      domConstruct.create('label', { innerHTML: 'Type' }, form);
+      var typeListId = 'rp-type-list-' + this.id;
+      var typeInput = domConstruct.create('input', { type: 'text', placeholder: 'e.g. Coordination, Site...' }, form);
+      typeInput.setAttribute('list', typeListId);
+      var datalist = domConstruct.create('datalist', { id: typeListId }, form);
+      array.forEach(knownTypes, function (t) { domConstruct.create('option', { value: t }, datalist); });
+
+      var kissCheckId = 'rp-kiss-' + this.id + '-' + Date.now();
+      var checkRow = domConstruct.create('div', { className: 'rp-popup-check' }, form);
+      var kissCheck = domConstruct.create('input', { type: 'checkbox', id: kissCheckId }, checkRow);
+      var kissLabel = domConstruct.create('label', {
+        innerHTML: 'Vehicle Swap / Kiss Point',
+        style: { margin: 0, textTransform: 'none', fontSize: '11.5px' }
+      }, checkRow);
+      kissLabel.setAttribute('for', kissCheckId);
+
+      var errorNode = domConstruct.create('div', { className: 'rp-popup-error' }, form);
+
+      var btnRow = domConstruct.create('div', { className: 'rp-popup-btn-row' }, form);
+      var saveBtn = domConstruct.create('button', { className: 'rp-btn rp-btn-primary rp-btn-sm', innerHTML: 'Save' }, btnRow);
+      var cancelBtn = domConstruct.create('button', { className: 'rp-btn rp-btn-secondary rp-btn-sm', innerHTML: 'Cancel' }, btnRow);
+
+      var saved = false;
+
+      on(saveBtn, 'click', function () {
+        var name = nameInput.value.trim();
+        if (!name) { errorNode.innerHTML = 'Name is required.'; return; }
+        saveBtn.disabled = true;
+        errorNode.innerHTML = '';
+        self._saveNewWaypoint(marker.getLatLng(), name, typeInput.value.trim(), !!kissCheck.checked)
+          .then(function () {
+            saved = true;
+            marker.closePopup();
+            self.leafletMap.removeLayer(marker);
+            self._pendingWaypointMarker = null;
+            self._setAddingMode(false);
+          }, function (err) {
+            saveBtn.disabled = false;
+            errorNode.innerHTML = 'Save failed: ' + escapeHtml(err && err.message || err);
+          });
+      });
+
+      on(cancelBtn, 'click', function () {
+        marker.closePopup();
+      });
+
+      marker.bindPopup(form, { closeOnClick: false, minWidth: 230 }).openPopup();
+      marker.on('popupclose', function () {
+        if (!saved && self._pendingWaypointMarker === marker) {
+          self.leafletMap.removeLayer(marker);
+          self._pendingWaypointMarker = null;
+        }
+      });
+      marker.on('dragend', function () { /* position read fresh from marker.getLatLng() on save */ });
+    },
+
+    // Uses a detached esri/layers/FeatureLayer purely for its applyEdits()
+    // call — it's never added to any map, just used to talk to the REST
+    // endpoint once its metadata (fields/capabilities) has loaded.
+    _getWaypointsEditLayer: function () {
+      var deferred = new Deferred();
+      if (!this._waypointsLayerUrl) {
+        deferred.reject(new Error('Waypoints layer URL not resolved yet.'));
+        return deferred.promise;
+      }
+      if (this._waypointsEditLayer && this._waypointsEditLayer.loaded) {
+        deferred.resolve(this._waypointsEditLayer);
+        return deferred.promise;
+      }
+      if (!this._waypointsEditLayer) {
+        this._waypointsEditLayer = new FeatureLayer(this._waypointsLayerUrl, { mode: FeatureLayer.MODE_ONDEMAND });
+      }
+      var layerRef = this._waypointsEditLayer;
+      on.once(layerRef, 'load', function () { deferred.resolve(layerRef); });
+      on.once(layerRef, 'error', function (err) { deferred.reject(err); });
+      return deferred.promise;
+    },
+
+    _saveNewWaypoint: function (latlng, name, typeVal, isKiss) {
+      var deferred = new Deferred();
+      var self = this;
+      var fields = this.config.waypointFields || {};
+
+      this._showLoading('Saving waypoint…');
+      this._getWaypointsEditLayer().then(function (layer) {
+        var attrs = {};
+        attrs[fields.nameField || 'name'] = name;
+        attrs[fields.typeField || 'type'] = typeVal || '';
+        attrs[fields.kissPointField || 'kisspoint'] = isKiss
+          ? (self.config.kissPointWriteTrueValue || 'Yes')
+          : (self.config.kissPointWriteFalseValue || 'No');
+
+        var geometry = new EsriPoint(latlng.lng, latlng.lat, new SpatialReference({ wkid: 4326 }));
+        var graphic = new Graphic(geometry, null, attrs);
+
+        layer.applyEdits([graphic], null, null, function (addResults) {
+          self._hideLoading();
+          var result = addResults && addResults[0];
+          if (!result || !result.success) {
+            var msg = (result && result.error && result.error.description) || 'Server rejected the edit.';
+            self._showToast('Failed to save waypoint: ' + msg, true);
+            deferred.reject(new Error(msg));
+            return;
+          }
+
+          var idField = fields.idField || 'fid';
+          var newWp = {
+            id: result.objectId,
+            name: name,
+            type: typeVal || '',
+            isKissPoint: isKiss,
+            lng: latlng.lng,
+            lat: latlng.lat
+          };
+          newWp.id = result.objectId != null ? result.objectId : ('new-' + Date.now());
+          self.waypoints.push(newWp);
+          self._renderBaseWaypointsLayer();
+          self._showToast('Waypoint "' + name + '" saved.', false);
+          deferred.resolve(newWp);
+        }, function (err) {
+          self._hideLoading();
+          self._showToast('Failed to save waypoint: ' + (err && err.message || err), true);
+          deferred.reject(err);
+        });
+      }, function (err) {
+        self._hideLoading();
+        self._showToast('Could not reach Waypoints layer for editing: ' + (err && err.message || err), true);
+        deferred.reject(err);
+      });
+
+      return deferred.promise;
     },
 
     // ====================================================================
@@ -1254,7 +1487,8 @@ define([
       this.arrInput.value = '';
       this.lastCalculatedRoute = null;
 
-      this.graphicsLayer.clear();
+      if (this.routeLayerGroup) this.routeLayerGroup.clearLayers();
+      this._setBaseWaypointsDimmed(false);
       this.summaryNode.style.display = 'none';
       this.summaryNode.innerHTML = '';
       this.optionsNode.style.display = 'none';

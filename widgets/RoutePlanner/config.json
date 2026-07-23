@@ -18,6 +18,10 @@
   "_comment_kissPointValues": "kisspoint field values (case-insensitive) that count as a Vehicle Swap / Kiss Point. Anything else (including blank/No/0) counts as false.",
   "kissPointTrueValues": ["yes", "y", "true", "1", "kiss", "kisspoint", "swap"],
 
+  "_comment_kissPointWrite": "Exact string written to the kisspoint field when adding a new waypoint via the Add Waypoint tool.",
+  "kissPointWriteTrueValue": "Yes",
+  "kissPointWriteFalseValue": "No",
+
   "_comment_depArrTypes": "type field values (case-insensitive) selectable as Departure/Arrival endpoints. All other waypoints are pass-through stops only, auto-detected along the route.",
   "depArrTypes": ["Coordination", "Base", "Site"],
 
@@ -27,5 +31,10 @@
 
   "defaultAvgSpeedKmh": 40,
 
-  "maxRouteAlternatives": 3
+  "maxRouteAlternatives": 3,
+
+  "_comment_basemap": "The widget renders its own embedded Leaflet map (independent of the app's ArcGIS Map) for speed. Points to public OpenStreetMap tiles by default -- if this Enterprise network can't reach that, swap in an internal/offline tile server URL template here.",
+  "basemapTileUrlTemplate": "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  "basemapAttribution": "© OpenStreetMap contributors",
+  "basemapMaxZoom": 19
 }
