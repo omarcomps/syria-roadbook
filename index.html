@@ -134,29 +134,32 @@
   .map-hint { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,.85); color: #fff; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 999px; z-index: 1000; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
   .toast { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #fff; background: #0f172a; z-index: 1000; box-shadow: 0 6px 18px rgba(0,0,0,.3); max-width: 80%; text-align: center; }
 
-  /* -------------------------------------------------------- CORNER PANELS */
-  /* column-reverse so DOM order (legend, then data-info) stacks data-info
-     at the very bottom-left corner with the legend growing upward above
-     it, regardless of how tall the legend's (default-expanded) content is. */
-  #bottom-left-controls { position: absolute; left: 10px; bottom: 10px; z-index: 900; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: 240px; }
-  #data-info-panel, #legend-panel { font-size: 11px; }
-  #data-info-panel { max-width: 240px; }
-  #legend-panel { max-width: 200px; }
-
-  #data-info-toggle, #legend-toggle {
-    display: flex; align-items: center; gap: 6px;
-    background: rgba(255,255,255,.95); border: 1px solid #e2e8f0; border-radius: 999px;
-    padding: 6px 12px; font-size: 11px; font-weight: 600; color: #334155; cursor: pointer;
-    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  /* ------------------------------------------------------- LEGEND (map) */
+  #legend-panel {
+    position: absolute; left: 10px; bottom: 10px; z-index: 900; max-width: 210px; font-size: 11px;
+    background: rgba(255,255,255,.97); border: 1px solid #e2e8f0; border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.15); overflow: hidden;
   }
-  #legend-toggle { border-radius: 6px; }
+  #legend-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    background: transparent; border: none; padding: 8px 12px; font-size: 11.5px; font-weight: 700;
+    color: #1e293b; cursor: pointer; text-align: left;
+  }
   .chev { font-size: 9px; color: #94a3b8; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
   .dot.ok { background: #22c55e; } .dot.err { background: #ef4444; }
 
-  #data-info-details, #legend-details {
-    margin-top: 6px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
-    padding: 10px 12px; box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  #legend-details { padding: 0 12px 10px; border-top: 1px solid #f1f5f9; padding-top: 8px; }
+
+  /* --------------------------------------------------- DATA STATUS (sidebar) */
+  #data-info-panel { margin-bottom: 11px; }
+  #data-info-toggle {
+    display: flex; align-items: center; gap: 6px; width: 100%;
+    background: #fff; border: 1px solid #e2e8f0; border-radius: 6px;
+    padding: 7px 10px; font-size: 11px; font-weight: 600; color: #334155; cursor: pointer; text-align: left;
+  }
+  #data-info-details {
+    margin-top: 6px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;
   }
   .info-layer { margin-bottom: 8px; }
   .info-layer:last-child { margin-bottom: 0; }
@@ -212,6 +215,15 @@
     </div>
 
     <div id="scroll">
+      <div id="data-info-panel">
+        <button id="data-info-toggle" type="button">
+          <span class="dot" id="data-info-dot"></span>
+          <span id="data-info-summary">Loading data…</span>
+          <span class="chev">▾</span>
+        </button>
+        <div id="data-info-details" style="display:none;"></div>
+      </div>
+
       <div class="card">
         <div class="field">
           <label>Departure (A)</label>
@@ -273,20 +285,12 @@
         <div class="map-hint" id="map-hint" style="display:none;"></div>
         <div class="toast" id="toast" style="display:none;"></div>
 
-        <div id="bottom-left-controls">
-          <div id="legend-panel">
-            <button id="legend-toggle" type="button">Legend <span class="chev">▾</span></button>
-            <div id="legend-details"></div>
-          </div>
-
-          <div id="data-info-panel">
-            <button id="data-info-toggle" type="button">
-              <span class="dot" id="data-info-dot"></span>
-              <span id="data-info-summary">Loading data…</span>
-              <span class="chev">▾</span>
-            </button>
-            <div id="data-info-details" style="display:none;"></div>
-          </div>
+        <div id="legend-panel">
+          <button id="legend-toggle" type="button">
+            <span>Legend</span>
+            <span class="chev">▾</span>
+          </button>
+          <div id="legend-details"></div>
         </div>
       </div>
 
