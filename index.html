@@ -89,11 +89,11 @@
   .alert { border-radius: 6px; padding: 10px; font-size: 12px; line-height: 1.4; }
   .alert.error { background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
 
-  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
-  .metric { background: var(--primary-tint); border: 1px solid var(--primary-tint-2); border-radius: 6px; padding: 6px 9px; }
+  .metric-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .metric { background: var(--primary-tint); border: 1px solid var(--primary-tint-2); border-radius: 6px; padding: 6px 7px; min-width: 0; }
   .metric.wide { grid-column: auto; }
-  .metric-val { font-size: 14px; font-weight: 800; color: var(--primary-dark); line-height: 1.25; }
-  .metric-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-top: 1px; white-space: nowrap; }
+  .metric-val { font-size: 13px; font-weight: 800; color: var(--primary-dark); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .metric-lbl { font-size: 7.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .01em; margin-top: 1px; line-height: 1.2; }
   .swap-note-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
   .swap-note { font-size: 10px; color: #b45309; font-weight: 700; display: flex; align-items: center; gap: 4px; }
   .swap-note svg { flex-shrink: 0; }
@@ -135,9 +135,13 @@
   .toast { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #fff; background: #0f172a; z-index: 1000; box-shadow: 0 6px 18px rgba(0,0,0,.3); max-width: 80%; text-align: center; }
 
   /* -------------------------------------------------------- CORNER PANELS */
-  #data-info-panel, #legend-panel { position: absolute; z-index: 900; font-size: 11px; }
-  #data-info-panel { left: 10px; bottom: 10px; max-width: 320px; }
-  #legend-panel { right: 10px; top: 10px; max-width: 220px; }
+  /* column-reverse so DOM order (legend, then data-info) stacks data-info
+     at the very bottom-left corner with the legend growing upward above
+     it, regardless of how tall the legend's (default-expanded) content is. */
+  #bottom-left-controls { position: absolute; left: 10px; bottom: 10px; z-index: 900; display: flex; flex-direction: column-reverse; align-items: flex-start; gap: 8px; max-width: 240px; }
+  #data-info-panel, #legend-panel { font-size: 11px; }
+  #data-info-panel { max-width: 240px; }
+  #legend-panel { max-width: 200px; }
 
   #data-info-toggle, #legend-toggle {
     display: flex; align-items: center; gap: 6px;
@@ -269,18 +273,20 @@
         <div class="map-hint" id="map-hint" style="display:none;"></div>
         <div class="toast" id="toast" style="display:none;"></div>
 
-        <div id="data-info-panel">
-          <button id="data-info-toggle" type="button">
-            <span class="dot" id="data-info-dot"></span>
-            <span id="data-info-summary">Loading data…</span>
-            <span class="chev">▾</span>
-          </button>
-          <div id="data-info-details" style="display:none;"></div>
-        </div>
+        <div id="bottom-left-controls">
+          <div id="legend-panel">
+            <button id="legend-toggle" type="button">Legend <span class="chev">▾</span></button>
+            <div id="legend-details"></div>
+          </div>
 
-        <div id="legend-panel">
-          <button id="legend-toggle" type="button">Legend <span class="chev">▾</span></button>
-          <div id="legend-details" style="display:none;"></div>
+          <div id="data-info-panel">
+            <button id="data-info-toggle" type="button">
+              <span class="dot" id="data-info-dot"></span>
+              <span id="data-info-summary">Loading data…</span>
+              <span class="chev">▾</span>
+            </button>
+            <div id="data-info-details" style="display:none;"></div>
+          </div>
         </div>
       </div>
 
@@ -1178,6 +1184,10 @@
   }
 
   function clearRouteDisplay() {
+    // Keep App.lastCalculatedRoute in sync with what's actually drawn --
+    // otherwise the legend (and anything else keyed off "is there a route
+    // on screen") would keep describing a route that was just wiped.
+    App.lastCalculatedRoute = null;
     if (App.routeLayerGroup) App.routeLayerGroup.clearLayers();
     setBaseWaypointsDimmed(false);
     setNetworkLineDimmed(false);
@@ -1186,6 +1196,7 @@
     el('schematic-placeholder').style.display = 'block';
     el('schematic').innerHTML = '';
     resetTable();
+    updateLegend();
   }
 
   function showSummaryError(title, msg) {
@@ -1343,6 +1354,7 @@
       interactive: false
     }).addTo(App.map);
     App.networkBaseLine.bringToBack();
+    updateLegend();
   }
 
   function setNetworkLineDimmed(dimmed) {
@@ -1374,6 +1386,7 @@
       var pts = App.waypoints.filter(function (w) { return w.lat != null && w.lng != null; }).map(function (w) { return [w.lat, w.lng]; });
       if (pts.length > 0) { var b = L.latLngBounds(pts); if (b.isValid()) App.map.fitBounds(b, { padding: [30, 30], maxZoom: 10 }); }
     }
+    updateLegend();
   }
 
   function setBaseWaypointsDimmed(dimmed) {
@@ -1435,6 +1448,7 @@
     var bounds = L.latLngBounds(res.routeCoords.map(function (c) { return [c[1], c[0]]; }));
     stops.forEach(function (node) { bounds.extend([node.wp.lat, node.wp.lng]); });
     App.map.fitBounds(bounds, { padding: [30, 30] });
+    updateLegend();
   }
 
   // ====================================================================
@@ -1696,6 +1710,7 @@
     el('schematic-placeholder').style.display = 'block';
     resetTable();
     checkReadyToCalculate();
+    updateLegend();
   }
 
   function onExportCsv() {
@@ -1722,6 +1737,9 @@
   // and the WAB template's oauth-callback.html popup page.
   // ====================================================================
   function setupCornerPanels() {
+    // Plain toggles, no outside-click auto-close -- these are reference
+    // panels meant to stay open while working, not transient dropdown
+    // menus (the legend defaults to expanded for exactly that reason).
     function wireToggle(btnId, panelId) {
       el(btnId).addEventListener('click', function (e) {
         e.stopPropagation();
@@ -1731,23 +1749,38 @@
     }
     wireToggle('data-info-toggle', 'data-info-details');
     wireToggle('legend-toggle', 'legend-details');
-    document.body.addEventListener('click', function () {
-      el('data-info-details').style.display = 'none';
-      el('legend-details').style.display = 'none';
-    });
+    updateLegend();
+  }
 
-    function swatchDot(color) { return '<span class="legend-swatch" style="width:12px;height:12px;border-radius:50%;background:' + color + ';border:1.5px solid #fff;box-shadow:0 0 0 1px #cbd5e1;"></span>'; }
-    function swatchLine(color, dashed) { return '<span class="legend-line" style="border-top-color:' + color + ';' + (dashed ? 'border-top-style:dashed;' : '') + '"></span>'; }
+  function legendSwatchDot(color) { return '<span class="legend-swatch" style="width:12px;height:12px;border-radius:50%;background:' + color + ';border:1.5px solid #fff;box-shadow:0 0 0 1px #cbd5e1;"></span>'; }
+  function legendSwatchLine(color, dashed) { return '<span class="legend-line" style="border-top-color:' + color + ';' + (dashed ? 'border-top-style:dashed;' : '') + '"></span>'; }
+  function legendRow(swatchHtml, label) { return '<div class="legend-row">' + swatchHtml + label + '</div>'; }
 
-    el('legend-details').innerHTML =
-      '<div class="legend-row">' + swatchLine('#d02327', false) + 'Calculated route</div>' +
-      '<div class="legend-row">' + swatchLine('#94a3b8', false) + 'Road network</div>' +
-      '<div class="legend-row">' + swatchLine('#d97706', true) + 'Connector link</div>' +
-      '<div class="legend-row">' + swatchDot('#d02327') + 'Departure (A)</div>' +
-      '<div class="legend-row">' + swatchDot('#1e3a5f') + 'Arrival (B)</div>' +
-      '<div class="legend-row">' + swatchDot('#7c3aed') + 'Required waypoint</div>' +
-      '<div class="legend-row">' + swatchDot('#d97706') + 'Kisspoint</div>' +
-      '<div class="legend-row">' + swatchDot('#94a3b8') + 'Waypoint on route</div>';
+  // Rebuilt every time the map's content changes -- only lists what is
+  // actually drawn right now, not every symbol the app is capable of
+  // showing.
+  function updateLegend() {
+    var el2 = el('legend-details');
+    if (!el2) return;
+    var rows = [];
+
+    if (App.networkBaseLine) rows.push(legendRow(legendSwatchLine('#94a3b8', false), 'Road network'));
+
+    var res = App.lastCalculatedRoute;
+    if (res) {
+      rows.push(legendRow(legendSwatchLine('#d02327', false), 'Calculated route'));
+      var hasConnector = res.nodeList.some(function (n) { return n.connectorDist > 0.001; });
+      if (hasConnector) rows.push(legendRow(legendSwatchLine('#d97706', true), 'Connector link'));
+      rows.push(legendRow(legendSwatchDot('#d02327'), 'Departure (A)'));
+      rows.push(legendRow(legendSwatchDot('#1e3a5f'), 'Arrival (B)'));
+      if (res.orderedStopWaypoints.length > 2) rows.push(legendRow(legendSwatchDot('#7c3aed'), 'Required waypoint'));
+      if (res.detectedWaypoints.some(function (w) { return w.wp.isKissPoint; })) rows.push(legendRow(legendSwatchDot('#d97706'), 'Kisspoint'));
+      if (res.detectedWaypoints.some(function (w) { return !w.wp.isKissPoint; })) rows.push(legendRow(legendSwatchDot('#94a3b8'), 'Waypoint on route'));
+    } else if (App.waypoints.length) {
+      rows.push(legendRow(legendSwatchDot('#94a3b8'), 'Waypoint (click to edit)'));
+    }
+
+    el2.innerHTML = rows.length ? rows.join('') : '<div class="legend-row" style="color:#94a3b8;font-style:italic;">Nothing on the map yet</div>';
   }
 
   function startApp() {
