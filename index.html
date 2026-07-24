@@ -94,7 +94,8 @@
   .metric.wide { grid-column: auto; }
   .metric-val { font-size: 14px; font-weight: 800; color: var(--primary-dark); line-height: 1.25; }
   .metric-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .02em; margin-top: 1px; white-space: nowrap; }
-  .swap-note { font-size: 10px; color: #b45309; font-weight: 700; margin-top: 5px; display: flex; align-items: center; gap: 4px; }
+  .swap-note-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+  .swap-note { font-size: 10px; color: #b45309; font-weight: 700; display: flex; align-items: center; gap: 4px; }
   .swap-note svg { flex-shrink: 0; }
 
   .options-list { display: flex; flex-direction: column; gap: 6px; }
@@ -117,6 +118,7 @@
   .table-wrap { max-height: 320px; overflow: auto; border: 1px solid #e2e8f0; border-radius: 6px; }
   table.manifest { width: 100%; border-collapse: collapse; font-size: 11px; }
   table.manifest th { position: sticky; top: 0; background: #f1f5f9; color: #475569; text-align: left; padding: 6px 7px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  table.manifest th.th-wrap { white-space: normal; max-width: 92px; line-height: 1.2; }
   table.manifest td { padding: 6px 7px; border-bottom: 1px solid #f1f5f9; white-space: nowrap; }
   table.manifest tr:hover td { filter: brightness(0.96); }
   tr.row-departure td { background: var(--primary-tint); }
@@ -131,6 +133,38 @@
   #map { position: absolute; inset: 0; }
   .map-hint { position: absolute; top: 14px; left: 50%; transform: translateX(-50%); background: rgba(15,23,42,.85); color: #fff; font-size: 12px; font-weight: 600; padding: 8px 16px; border-radius: 999px; z-index: 1000; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.25); }
   .toast { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 9px 18px; border-radius: 8px; font-size: 12px; font-weight: 600; color: #fff; background: #0f172a; z-index: 1000; box-shadow: 0 6px 18px rgba(0,0,0,.3); max-width: 80%; text-align: center; }
+
+  /* -------------------------------------------------------- CORNER PANELS */
+  #data-info-panel, #legend-panel { position: absolute; z-index: 900; font-size: 11px; }
+  #data-info-panel { left: 10px; bottom: 10px; max-width: 320px; }
+  #legend-panel { right: 10px; top: 10px; max-width: 220px; }
+
+  #data-info-toggle, #legend-toggle {
+    display: flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,.95); border: 1px solid #e2e8f0; border-radius: 999px;
+    padding: 6px 12px; font-size: 11px; font-weight: 600; color: #334155; cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
+  #legend-toggle { border-radius: 6px; }
+  .chev { font-size: 9px; color: #94a3b8; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #cbd5e1; flex-shrink: 0; }
+  .dot.ok { background: #22c55e; } .dot.err { background: #ef4444; }
+
+  #data-info-details, #legend-details {
+    margin-top: 6px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 10px 12px; box-shadow: 0 6px 18px rgba(0,0,0,.15);
+  }
+  .info-layer { margin-bottom: 8px; }
+  .info-layer:last-child { margin-bottom: 0; }
+  .info-layer-name { font-weight: 700; color: #1e293b; font-size: 11px; }
+  .info-layer-count { color: #64748b; font-size: 10.5px; }
+  .info-layer-url { display: block; color: #0369a1; font-size: 9.5px; word-break: break-all; text-decoration: none; margin-top: 2px; }
+  .info-layer-url:hover { text-decoration: underline; }
+
+  .legend-row { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font-size: 10.5px; color: #334155; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-swatch { flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .legend-line { width: 20px; height: 0; border-top-width: 3px; border-top-style: solid; flex-shrink: 0; }
   .toast.error { background: #b91c1c; } .toast.ok { background: #166534; }
 
   .pin-num { width: 14px; height: 14px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 7px; font-weight: 700; border: 1.5px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
@@ -174,10 +208,6 @@
     </div>
 
     <div id="scroll">
-      <div class="status-row">
-        <div class="status" id="data-status">Loading routes and waypoints data…</div>
-      </div>
-
       <div class="card">
         <div class="field">
           <label>Departure (A)</label>
@@ -238,10 +268,24 @@
         <div id="map"></div>
         <div class="map-hint" id="map-hint" style="display:none;"></div>
         <div class="toast" id="toast" style="display:none;"></div>
+
+        <div id="data-info-panel">
+          <button id="data-info-toggle" type="button">
+            <span class="dot" id="data-info-dot"></span>
+            <span id="data-info-summary">Loading data…</span>
+            <span class="chev">▾</span>
+          </button>
+          <div id="data-info-details" style="display:none;"></div>
+        </div>
+
+        <div id="legend-panel">
+          <button id="legend-toggle" type="button">Legend <span class="chev">▾</span></button>
+          <div id="legend-details" style="display:none;"></div>
+        </div>
       </div>
 
       <div id="diagram-pane">
-        <div class="card-title">Schematic Diagram</div>
+        <div class="card-title">Road Diagram</div>
         <div class="diagram-placeholder" id="schematic-placeholder">Calculate a route to see the waypoint sequence.</div>
         <div id="schematic-card" style="display:none;">
           <div class="schematic" id="schematic"></div>
@@ -262,7 +306,7 @@
         <div class="table-wrap">
           <table class="manifest">
             <thead>
-              <tr><th>#</th><th>Waypoint / Segment</th><th>Out Leg</th><th>Out Cum</th><th>Time</th><th>ETA</th><th>Ret Leg</th><th>Ret Cum</th><th>Ret Time</th></tr>
+              <tr><th>#</th><th>Waypoint / Segment</th><th class="th-wrap">Out Partial Distance</th><th class="th-wrap">Out Cumulative Distance</th><th>Time</th><th>ETA</th><th class="th-wrap">Ret Partial Distance</th><th class="th-wrap">Ret Cumulative Distance</th><th>Ret Time</th></tr>
             </thead>
             <tbody id="table-body"><tr><td colspan="9" class="empty-row">Calculate a route to view the manifest.</td></tr></tbody>
           </table>
@@ -421,6 +465,7 @@
     routeCoordSegments: [],
     nodeGrid: null, nodeGridMaxRadius: 0, gridCellDeg: 0.02,
     routesReady: false, waypointsReady: false, routesError: null, waypointsError: null,
+    routesFeatureCount: null, waypointsFeatureCount: null,
     selectedDepWp: null, selectedArrWp: null,
     requiredStops: [],
     lastCalculatedRoute: null,
@@ -690,32 +735,41 @@
     });
   }
 
-  // Single combined status line instead of two separate per-layer lines
-  // with raw feature counts — simpler at a glance; failures still name
-  // which layer broke and why.
+  // Corner panel on the map: a compact always-visible summary badge, plus
+  // an expandable details view naming each loaded layer, its feature
+  // count, and the service URL it was read from.
   function updateDataStatus() {
-    var statusEl = el('data-status');
+    var dot = el('data-info-dot'), summary = el('data-info-summary'), details = el('data-info-details');
     if (App.routesError || App.waypointsError) {
+      dot.className = 'dot err';
       var msgs = [];
       if (App.routesError) msgs.push('Routes: ' + App.routesError);
       if (App.waypointsError) msgs.push('Waypoints: ' + App.waypointsError);
-      statusEl.textContent = msgs.join(' · ');
-      statusEl.className = 'status err';
+      summary.textContent = 'Data failed to load';
+      details.innerHTML = '<div class="info-layer"><span style="color:#b91c1c;">' + escapeHtml(msgs.join(' · ')) + '</span></div>';
       return;
     }
     if (App.routesReady && App.waypointsReady) {
-      statusEl.textContent = 'Routes and waypoints data loaded';
-      statusEl.className = 'status ok';
-      return;
+      dot.className = 'dot ok';
+      summary.textContent = 'Routes and waypoints data loaded';
+    } else {
+      dot.className = 'dot';
+      summary.textContent = 'Loading routes and waypoints data…';
     }
-    statusEl.textContent = 'Loading routes and waypoints data…';
-    statusEl.className = 'status';
+    details.innerHTML =
+      '<div class="info-layer"><div class="info-layer-name">Routes</div>' +
+      '<div class="info-layer-count">' + (App.routesFeatureCount == null ? 'loading…' : App.routesFeatureCount + ' segments') + '</div>' +
+      '<a class="info-layer-url" href="' + escapeHtml(CONFIG.routesLayerUrl) + '" target="_blank" rel="noopener">' + escapeHtml(CONFIG.routesLayerUrl) + '</a></div>' +
+      '<div class="info-layer"><div class="info-layer-name">Waypoints</div>' +
+      '<div class="info-layer-count">' + (App.waypointsFeatureCount == null ? 'loading…' : App.waypointsFeatureCount + ' waypoints') + '</div>' +
+      '<a class="info-layer-url" href="' + escapeHtml(CONFIG.waypointsLayerUrl) + '" target="_blank" rel="noopener">' + escapeHtml(CONFIG.waypointsLayerUrl) + '</a></div>';
   }
 
   function loadRoutes() {
     queryAllFeatures(CONFIG.routesLayerUrl).then(function (features) {
       buildGraphFromRouteFeatures(features);
       App.routesReady = true;
+      App.routesFeatureCount = features.length;
       updateDataStatus();
       if (App.map) renderNetworkBaseLayer();
       checkReadyToCalculate();
@@ -743,6 +797,7 @@
         };
       });
       App.waypointsReady = true;
+      App.waypointsFeatureCount = App.waypoints.length;
       updateDataStatus();
 
       ['dep-input', 'arr-input', 'req-input'].forEach(function (id) { el(id).disabled = false; });
@@ -1104,6 +1159,16 @@
       totalDist += a.connectorDist + pathResult.totalDistance + b.connectorDist;
     }
 
+    // Must be geographic order (leg, then position within the leg) --
+    // buildRouteSequenceData assumes ascending order and derives each leg
+    // distance from the delta to the previous stop. Out-of-order entries
+    // produce a negative delta, which the table then shows as "-" (looks
+    // like a missing/uncalculated distance) instead of the real value.
+    detectedWaypoints.sort(function (x, y) {
+      if (x._legIndex !== y._legIndex) return x._legIndex - y._legIndex;
+      return x.locationWithinLeg - y.locationWithinLeg;
+    });
+
     var orderedStopWaypoints = order.map(function (idx) { return nodeList[idx]; });
     return {
       nodeList: nodeList, order: order, orderedStopWaypoints: orderedStopWaypoints,
@@ -1148,13 +1213,22 @@
   function renderSummaryCard(res) {
     var swapCount = res.detectedWaypoints.filter(function (w) { return w.wp.isKissPoint; }).length;
     var multiStop = res.orderedStopWaypoints.length > 2;
+    var startMinutes = getDepartureStartMinutes();
+    var totalHrs = res.totalDist / res.avgSpeedKmh;
+
     var html = '<div class="metric-grid">' +
       '<div class="metric"><div class="metric-val">' + res.totalDist.toFixed(1) + ' km</div><div class="metric-lbl">Total Distance</div></div>' +
       '<div class="metric"><div class="metric-val">' + res.detectedWaypoints.length + '</div><div class="metric-lbl">En-route Waypoints</div></div>' +
-      '<div class="metric wide"><div class="metric-val">' + formatDuration(res.totalDist / res.avgSpeedKmh) + '</div><div class="metric-lbl">Est. Travel Time (' + res.avgSpeedKmh + ' km/h)</div></div>' +
+      '<div class="metric"><div class="metric-val">' + formatDuration(totalHrs) + '</div><div class="metric-lbl">Est. Travel Time (' + res.avgSpeedKmh + ' km/h)</div></div>' +
+      '<div class="metric"><div class="metric-val">' + formatClockTime(startMinutes, totalHrs) + '</div><div class="metric-lbl">Est. Arrival Time</div></div>' +
+      '<div class="metric"><div class="metric-val">' + formatClockTime(startMinutes, totalHrs * 2) + '</div><div class="metric-lbl">Est. Returning Time</div></div>' +
       '</div>';
-    if (multiStop) html += '<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required waypoint(s), auto-ordered</div>';
-    if (swapCount > 0) html += '<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Kisspoint(s) Included</div>';
+
+    var notes = [];
+    if (multiStop) notes.push('<div class="swap-note" style="color:#7c3aed;">' + svgIcon('star', 11, '#7c3aed') + ' ' + (res.orderedStopWaypoints.length - 2) + ' required waypoint(s), auto-ordered</div>');
+    if (swapCount > 0) notes.push('<div class="swap-note">' + svgIcon('swap', 11, '#b45309') + ' ' + swapCount + ' Kisspoint(s) Included</div>');
+    if (notes.length) html += '<div class="swap-note-row">' + notes.join('') + '</div>';
+
     el('summary-card').style.display = 'block';
     el('summary-card').innerHTML = html;
   }
@@ -1334,12 +1408,16 @@
 
     L.polyline(res.routeCoords.map(function (c) { return [c[1], c[0]]; }), { color: '#d02327', weight: 5, opacity: .9, lineCap: 'round' }).addTo(App.routeLayerGroup);
 
+    // Labels only ever appear on hover now (permanent:false everywhere) --
+    // clicking/tapping a marker no longer pins its label open or opens a
+    // popup; any info the popup used to carry (Kisspoint status) is folded
+    // into the hover tooltip text instead so nothing is lost.
     res.detectedWaypoints.forEach(function (item) {
       var isKiss = item.wp.isKissPoint;
       var marker = L.marker([item.wp.lat, item.wp.lng], { icon: isKiss ? leafletIcon('kiss') : leafletIcon('num', { color: '#94a3b8', label: '•' }) }).addTo(App.routeLayerGroup);
-      var tooltipHtml = '<strong>' + escapeHtml(item.wp.name) + '</strong>' + tooltipDetail(item.wp.id);
-      marker.bindTooltip(tooltipHtml, { permanent: isKiss, direction: 'top', offset: [0, -12] });
-      marker.bindPopup('<strong>' + escapeHtml(item.wp.name) + '</strong>' + (isKiss ? '<br/><span style="color:#d97706;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' + svgIcon('swap', 11, '#d97706') + ' Kisspoint</span>' : ''));
+      var kissLine = isKiss ? ('<br/><span style="color:#d97706;font-weight:bold;display:inline-flex;align-items:center;gap:4px;">' + svgIcon('swap', 10, '#d97706') + ' Kisspoint</span>') : '';
+      var tooltipHtml = '<strong>' + escapeHtml(item.wp.name) + '</strong>' + kissLine + tooltipDetail(item.wp.id);
+      marker.bindTooltip(tooltipHtml, { permanent: false, direction: 'top', offset: [0, -12] });
     });
 
     stops.forEach(function (node, i) {
@@ -1351,7 +1429,7 @@
       var marker = L.marker([node.wp.lat, node.wp.lng], { icon: icon }).addTo(App.routeLayerGroup);
       var label = isFirst ? ('A: ' + node.wp.name) : isLast ? ('B: ' + node.wp.name) : node.wp.name;
       var tooltipHtml = '<strong>' + escapeHtml(label) + '</strong>' + tooltipDetail(node.wp.id);
-      marker.bindTooltip(tooltipHtml, { permanent: true, direction: 'top', offset: [0, -20] });
+      marker.bindTooltip(tooltipHtml, { permanent: false, direction: 'top', offset: [0, -20] });
     });
 
     var bounds = L.latLngBounds(res.routeCoords.map(function (c) { return [c[1], c[0]]; }));
@@ -1643,12 +1721,42 @@
   // reusing the existing appId (already registered, no new setup needed)
   // and the WAB template's oauth-callback.html popup page.
   // ====================================================================
+  function setupCornerPanels() {
+    function wireToggle(btnId, panelId) {
+      el(btnId).addEventListener('click', function (e) {
+        e.stopPropagation();
+        var panel = el(panelId);
+        panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+      });
+    }
+    wireToggle('data-info-toggle', 'data-info-details');
+    wireToggle('legend-toggle', 'legend-details');
+    document.body.addEventListener('click', function () {
+      el('data-info-details').style.display = 'none';
+      el('legend-details').style.display = 'none';
+    });
+
+    function swatchDot(color) { return '<span class="legend-swatch" style="width:12px;height:12px;border-radius:50%;background:' + color + ';border:1.5px solid #fff;box-shadow:0 0 0 1px #cbd5e1;"></span>'; }
+    function swatchLine(color, dashed) { return '<span class="legend-line" style="border-top-color:' + color + ';' + (dashed ? 'border-top-style:dashed;' : '') + '"></span>'; }
+
+    el('legend-details').innerHTML =
+      '<div class="legend-row">' + swatchLine('#d02327', false) + 'Calculated route</div>' +
+      '<div class="legend-row">' + swatchLine('#94a3b8', false) + 'Road network</div>' +
+      '<div class="legend-row">' + swatchLine('#d97706', true) + 'Connector link</div>' +
+      '<div class="legend-row">' + swatchDot('#d02327') + 'Departure (A)</div>' +
+      '<div class="legend-row">' + swatchDot('#1e3a5f') + 'Arrival (B)</div>' +
+      '<div class="legend-row">' + swatchDot('#7c3aed') + 'Required waypoint</div>' +
+      '<div class="legend-row">' + swatchDot('#d97706') + 'Kisspoint</div>' +
+      '<div class="legend-row">' + swatchDot('#94a3b8') + 'Waypoint on route</div>';
+  }
+
   function startApp() {
     el('signin-overlay').style.display = 'none';
     el('app').style.display = 'flex';
 
     initMap();
     setupCombos();
+    setupCornerPanels();
 
     el('tolerance-input').value = CONFIG.defaultToleranceMeters;
     el('speed-input').value = CONFIG.defaultAvgSpeedKmh;
